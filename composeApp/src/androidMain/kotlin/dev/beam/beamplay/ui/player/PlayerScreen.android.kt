@@ -212,7 +212,9 @@ actual fun BeamPlayerScreen(
     var statusPill by remember { mutableStateOf<String?>(null) }
     var dragSide by remember { mutableIntStateOf(0) }
     var brightStart by remember { mutableFloatStateOf(0.5f) }
+    var brightTravel by remember { mutableFloatStateOf(0f) }
     var volStart by remember { mutableIntStateOf(0) }
+    var volTravel by remember { mutableFloatStateOf(0f) }
     var scrubbing by remember { mutableStateOf(false) }
     var showRemaining by remember { mutableStateOf(PlayerPrefs.showRemaining(appCtx)) }
     var scrubPosition by remember { mutableLongStateOf(0L) }
@@ -509,15 +511,18 @@ actual fun BeamPlayerScreen(
                                 if (dragSide == 1) {
                                     val current = activity?.window?.attributes?.screenBrightness ?: -1f
                                     brightStart = if (current < 0f) 0.5f else current
+                                    brightTravel = 0f
                                 } else {
                                     val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
                                     volStart = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                                    volTravel = 0f
                                 }
                             },
                             onVerticalDrag = { _, dy ->
                                 val height = size.height.toFloat().coerceAtLeast(1f)
                                 if (dragSide == 1) {
-                                    val next = (brightStart - dy / height * 1.2f).coerceIn(0.02f, 1f)
+                                    brightTravel += dy
+                                    val next = (brightStart - brightTravel / height * 1.4f).coerceIn(0.02f, 1f)
                                     activity?.window?.let { w ->
                                         val lp = w.attributes
                                         lp.screenBrightness = next
@@ -527,7 +532,8 @@ actual fun BeamPlayerScreen(
                                 } else {
                                     val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
                                     val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                                    val moved = (-dy / height * max).roundToInt()
+                                    volTravel += dy
+                                    val moved = (-volTravel / height * max * 1.4f).roundToInt()
                                     val next = (volStart + moved).coerceIn(0, max)
                                     am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, next, 0)
                                     statusPill = "\uD83D\uDD0A " + next + "/" + max
