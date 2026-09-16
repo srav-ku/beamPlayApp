@@ -226,12 +226,12 @@ actual fun BeamPlayerScreen(
         controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val previous = activity?.requestedOrientation
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         PlayerSession.isOpen = true
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            activity?.requestedOrientation = previous ?: ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             PlayerSession.isOpen = false
             player?.release()
             player = null
@@ -668,6 +668,7 @@ actual fun BeamPlayerScreen(
         // no gradients, no scrims, no centred play button, no kebab menu.
         val alpha by animateFloatAsState(
             targetValue = if (controlsVisible && !locked) 1f else 0f,
+            animationSpec = tween(200),
             animationSpec = tween(200),
             label = "overlay-alpha",
         )
