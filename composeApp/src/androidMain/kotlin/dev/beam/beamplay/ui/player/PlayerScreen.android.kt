@@ -850,7 +850,7 @@ private fun PlayerSettingsSheet(
     ) {
         Column(
             Modifier
-                .fillMaxWidth(0.88f)
+                .fillMaxWidth(0.78f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFF1E1E1E))
                 .clickable(enabled = false) {},
@@ -904,11 +904,32 @@ private fun PlayerSettingsSheet(
                     }
 
                     tab == 0 -> {
-                        SPEED_STEPS.forEach { s ->
-                            ModalRow(
-                                label = if (s == 1f) "${fmtSpeed(s)} (default)" else fmtSpeed(s),
-                                selected = !boost && speed == s,
-                            ) { onSpeed(s) }
+                        SPEED_STEPS.chunked(4).forEach { row ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                row.forEach { s ->
+                                    val on = !boost && speed == s
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (on) Color(0xFFF5A623) else Color(0x1FFFFFFF))
+                                            .clickable { onSpeed(s) }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = if (s == 1f) "1x" else fmtSpeed(s),
+                                            color = if (on) Color(0xFF101014) else Color(0xFFEDEDED),
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                }
+                            }
                         }
                         SliderRow("CUSTOM SPEED", speed, 0.25f, 2f, fmtSpeed(speed)) { onSpeed(it) }
                         Row(
