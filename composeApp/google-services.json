@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "683803915198",
+    "project_id": "beam-20a1a",
+    "storage_bucket": "beam-20a1a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683803915198:android:fa079bb1e80be059b03fef",
+        "android_client_info": {
+          "package_name": "dev.beam.beamplay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "683803915198-lirga4492g4q4a159e4cv8brir3oab3e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcXX5gZHNwtIeeUuIFv4l41Zjbh0mHnng"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "683803915198-lirga4492g4q4a159e4cv8brir3oab3e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

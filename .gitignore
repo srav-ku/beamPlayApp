@@ -1,0 +1,9 @@
+build/
+.gradle/
+.kotlin/
+.idea/
+local.properties
+captures/
+*.log
+.beam-wireless
+reference-web-repo/
