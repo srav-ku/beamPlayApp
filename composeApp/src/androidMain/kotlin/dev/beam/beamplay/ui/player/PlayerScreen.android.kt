@@ -126,6 +126,7 @@ actual fun BeamPlayerScreen(
     streamUrl: String,
     subtitles: List<PlayerSubtitle>,
     startPositionMs: Long,
+    resumeKey: String,
     onBack: () -> Unit,
     onProgress: (Long, Long) -> Unit,
 ) {
@@ -157,6 +158,8 @@ actual fun BeamPlayerScreen(
     var captionBg by remember { mutableStateOf(true) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val videoKey = title + "|" + streamUrl
+    // Resume records are keyed on the stable source link when we have one.
+    val storeKey = if (resumeKey.isBlank()) streamUrl else resumeKey
     var subtitleStyle by remember {
         mutableStateOf(SubtitlePrefs.load(appCtx).copy(syncMs = SubtitlePrefs.loadSync(appCtx, videoKey)))
     }
@@ -221,8 +224,8 @@ actual fun BeamPlayerScreen(
         exo.prepare()
         exo.playWhenReady = true
          val resumeAt = if (startPositionMs > 0L) startPositionMs
-             else if (PlaybackStore.isCompleted(appCtx, streamUrl)) 0L
-             else PlaybackStore.resumeMs(appCtx, streamUrl)
+             else if (PlaybackStore.isCompleted(appCtx, storeKey)) 0L
+             else PlaybackStore.resumeMs(appCtx, storeKey)
          if (resumeAt > 0L) exo.seekTo(resumeAt)
         player = exo
 
@@ -256,9 +259,9 @@ actual fun BeamPlayerScreen(
              val pos = exo.currentPosition
              val dur = exo.duration.coerceAtLeast(0L)
              if (PlaybackStore.isFinished(pos, dur)) {
-                 PlaybackStore.markCompleted(appCtx, streamUrl, title, dur)
+                 PlaybackStore.markCompleted(appCtx, storeKey, title, dur, streamUrl)
              } else if (pos >= 3_000L) {
-                 PlaybackStore.saveProgress(appCtx, streamUrl, title, pos, dur)
+                 PlaybackStore.saveProgress(appCtx, storeKey, title, pos, dur, streamUrl)
              }
              exo.removeListener(listener)
              exo.release()
@@ -285,7 +288,7 @@ actual fun BeamPlayerScreen(
              if (durationMs > 0) {
                  val cp = player?.currentPosition ?: positionMs
                  onProgress(cp, durationMs)
-                 PlaybackStore.saveProgress(appCtx, streamUrl, title, cp, durationMs)
+                 PlaybackStore.saveProgress(appCtx, storeKey, title, cp, durationMs, streamUrl)
              }
          }
     }

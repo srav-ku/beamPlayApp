@@ -33,6 +33,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,17 +109,19 @@ private fun AppNavHost() {
     var backStack by remember { mutableStateOf(listOf<MediaItem>()) }
     var playback by remember { mutableStateOf<PlaybackRequest?>(null) }
 
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val request = playback
     val current = backStack.lastOrNull()
 
     when {
                 request != null -> {
-            androidx.compose.runtime.LaunchedEffect(request.url) { rememberContinueArt(request.url, request.art) }
+            androidx.compose.runtime.LaunchedEffect(request.url) { rememberContinueArt(request.resumeKey.ifBlank { request.url }, request.art) }
             BeamPlayerScreen(
             title = request.title,
             streamUrl = request.url,
             subtitles = request.subtitles,
             startPositionMs = 0L,
+            resumeKey = request.resumeKey,
             onBack = { playback = null },
             onProgress = { _, _ -> },
         )
@@ -127,14 +130,31 @@ private fun AppNavHost() {
         current == null -> MainScreen(
             onOpenMedia = { backStack = backStack + it },
             subtitleSettings = { BeamSubtitleSettingsScreen() },
-            onResumeContinue = { ci -> playback = PlaybackRequest(ci.title, ci.streamUrl, emptyList(), ci.art) },
+            onResumeContinue = { ci ->
+                // Re-resolve the manifest from the stable embed link, exactly like
+                // the Play button does, so an expired token can never break resume.
+                scope.launch {
+                    val meta = runCatching {
+                        dev.beam.beamplay.core.network.servicesOrNull?.vidaraApi?.getStreamMetadata(ci.sourceUrl)
+                    }.getOrNull()
+                    val playUrl = meta?.streaming_url?.takeIf { it.isNotBlank() } ?: ci.lastUrl
+                    val subs = meta?.subtitles?.map { sub ->
+                        val abs = if (sub.file_path.startsWith("http")) sub.file_path
+                        else (dev.beam.beamplay.core.network.servicesOrNull?.vidaraApi?.originOf(ci.sourceUrl) ?: "") + sub.file_path
+                        PlayerSubtitle(sub.language, abs)
+                    } ?: emptyList()
+                    if (playUrl.isNotBlank()) {
+                        playback = PlaybackRequest(ci.title, playUrl, subs, ci.art, ci.sourceUrl)
+                    }
+                }
+            },
         )
 
         else -> BeamDetailScreen(
             item = current,
             onBack = { backStack = backStack.dropLast(1) },
             onOpenMedia = { backStack = backStack + it },
-            onPlay = { url, subs -> playback = PlaybackRequest(current.title, url, subs, current.backdrop_path ?: current.poster_path) },
+            onPlay = { url, subs, src -> playback = PlaybackRequest(current.title, url, subs, current.backdrop_path ?: current.poster_path, src) },
         )
     }
 }
@@ -144,5 +164,7 @@ private data class PlaybackRequest(
     val url: String,
     val subtitles: List<PlayerSubtitle>,
     val art: String? = null,
+    val resumeKey: String = "",
 )
+
 

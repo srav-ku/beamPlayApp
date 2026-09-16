@@ -25,6 +25,8 @@ internal object PlaybackStore {
         val durationMs: Long,
         val updatedAt: Long,
         val completed: Boolean,
+        val art: String? = null,
+        val url: String? = null,
     )
 
     private fun prefs(ctx: Context) =
@@ -42,6 +44,7 @@ internal object PlaybackStore {
         positionMs: Long,
         durationMs: Long,
         done: Boolean,
+        url: String? = null,
     ) {
         if (key.isBlank()) return
         val p = prefs(ctx)
@@ -52,17 +55,18 @@ internal object PlaybackStore {
             .put("dur", durationMs.coerceAtLeast(0L))
             .put("ts", System.currentTimeMillis())
             .put("done", done)
+        if (!url.isNullOrBlank()) o.put("url", url)
         val id = slot(key)
         p.edit().putString(id, o.toString()).putStringSet(IDS, ids(ctx) + id).apply()
     }
 
     /** Called every few seconds while playing, and on pause / leave. */
-    fun saveProgress(ctx: Context, key: String, title: String, positionMs: Long, durationMs: Long) =
-        write(ctx, key, title, positionMs, durationMs, false)
+    fun saveProgress(ctx: Context, key: String, title: String, positionMs: Long, durationMs: Long, url: String? = null) =
+        write(ctx, key, title, positionMs, durationMs, false, url)
 
     /** Reached the end: leaves Continue Watching and moves to History. */
-    fun markCompleted(ctx: Context, key: String, title: String, durationMs: Long) =
-        write(ctx, key, title, durationMs, durationMs, true)
+    fun markCompleted(ctx: Context, key: String, title: String, durationMs: Long, url: String? = null) =
+        write(ctx, key, title, durationMs, durationMs, true, url)
 
     fun entry(ctx: Context, key: String): Entry? =
         prefs(ctx).getString(slot(key), null)?.let { parse(key, it) }
@@ -98,7 +102,7 @@ internal object PlaybackStore {
         val p = prefs(ctx)
         return ids(ctx)
             .mapNotNull { id -> p.getString(id, null)?.let { parse(id, it) } }
-            .filter { !it.key.contains('|') }
+            .filter { !it.key.contains('|') && !it.key.contains(".m3u8") }
             .sortedByDescending { it.updatedAt }
     }
 
@@ -115,10 +119,12 @@ internal object PlaybackStore {
         continueWatching(ctx).map {
             ContinueItem(
                 title = it.title.ifBlank { "Untitled" },
-                streamUrl = it.key,
+                sourceUrl = it.key,
+                lastUrl = it.url ?: "",
                 positionMs = it.positionMs,
                 durationMs = it.durationMs,
                 updatedAt = it.updatedAt,
+                art = artFor(ctx, it.key),
             )
         }
 
@@ -131,6 +137,7 @@ internal object PlaybackStore {
             durationMs = o.optLong("dur", 0L),
             updatedAt = o.optLong("ts", 0L),
             completed = o.optBoolean("done", false),
+            url = o.optString("url", null),
         )
     } catch (e: Exception) {
         null

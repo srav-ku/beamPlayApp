@@ -84,7 +84,7 @@ fun BeamDetailScreen(
     item: MediaItem,
     onBack: () -> Unit,
     onOpenMedia: (MediaItem) -> Unit,
-    onPlay: (String, List<PlayerSubtitle>) -> Unit,
+    onPlay: (String, List<PlayerSubtitle>, String) -> Unit,
 ) {
     val colors = Beam.colors
     val tmdbId = item.tmdb_id ?: 0L
@@ -479,6 +479,7 @@ fun BeamDetailScreen(
                                                 else (dev.beam.beamplay.core.network.servicesOrNull?.vidaraApi?.originOf(link.url) ?: "") + sub.file_path
                                                 PlayerSubtitle(sub.language, abs)
                                             },
+                                        link.url,
                                         )
                         }
                     }

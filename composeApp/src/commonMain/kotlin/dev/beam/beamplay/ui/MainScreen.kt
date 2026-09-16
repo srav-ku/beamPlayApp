@@ -319,6 +319,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
 
 @Composable
 private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}) {
+    var railTick by remember { mutableStateOf(0) }
     var trendingTab by remember { mutableStateOf("Movie") }
     var latestTab by remember { mutableStateOf("Movie") }
     var topRatedTab by remember { mutableStateOf("Movie") }
@@ -419,9 +420,9 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                 val popularItems = if (popularTab == "Movie") popularMovies else popularSeries
 
                 // Continue Watching - locally remembered streams, no network.
-                val resumeItems = localContinueWatching()
-                if (resumeItems.isNotEmpty()) {
-                    item {
+                item {
+                    val resumeItems = remember(railTick) { localContinueWatching() }
+                    if (resumeItems.isNotEmpty()) {
                         HomeSection(title = "Continue Watching") {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -429,11 +430,13 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                             ) {
                                 itemsIndexed(
                                     items = resumeItems,
-                                    key = { idx, ci -> "cw_" + ci.streamUrl + "_" + idx },
+                                    key = { idx, ci -> "cw_" + ci.sourceUrl + "_" + idx },
                                 ) { _, ci ->
                                     ContinueWatchingResumeCard(
                                         item = ci,
                                         onClick = { onResumeContinue(ci) },
+                                        onRemove = { removeContinueWatching(ci.sourceUrl); railTick++ },
+                                        onWatched = { markContinueWatchingWatched(ci.sourceUrl, ci.title, ci.durationMs); railTick++ },
                                     )
                                 }
                             }

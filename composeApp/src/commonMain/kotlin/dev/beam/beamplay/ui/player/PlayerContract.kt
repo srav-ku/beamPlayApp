@@ -28,6 +28,7 @@ expect fun BeamPlayerScreen(
     streamUrl: String,
     subtitles: List<PlayerSubtitle>,
     startPositionMs: Long,
+    resumeKey: String = "",
     onBack: () -> Unit,
     onProgress: (positionMs: Long, durationMs: Long) -> Unit,
 )

@@ -42,6 +42,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Check
 import dev.beam.beamplay.core.ui.theme.GeistMono
 import dev.beam.beamplay.data.Api
 import dev.beam.beamplay.data.MediaItem
@@ -482,6 +489,7 @@ fun ContinueWatchingCard(
         }
 
         // Progress bar at bottom edge
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -563,6 +571,8 @@ fun ErrorBlock(message: String) {
 fun ContinueWatchingResumeCard(
     item: ContinueItem,
     onClick: () -> Unit,
+    onRemove: () -> Unit = {},
+    onWatched: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val fraction = if (item.durationMs > 0L) {
@@ -579,6 +589,8 @@ fun ContinueWatchingResumeCard(
     }
 
     val imageUrl = item.art?.takeIf { it.isNotBlank() }?.let { Api.backdropUrl(it, "w500") }
+    var confirmRemove by remember { mutableStateOf(false) }
+
 
     Box(
         modifier = modifier
@@ -655,6 +667,47 @@ fun ContinueWatchingResumeCard(
             )
         }
 
+        Row(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xCC000000))
+                    .clickable { onWatched() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Check, "Mark as watched", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xCC000000))
+                    .clickable { confirmRemove = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Close, "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
+
+        if (confirmRemove) {
+            AlertDialog(
+                onDismissRequest = { confirmRemove = false },
+                title = { Text("Remove from Continue Watching?") },
+                text = { Text("\"" + item.title + "\" will be removed from this row.") },
+                confirmButton = {
+                    TextButton(onClick = { confirmRemove = false; onRemove() }) { Text("Remove") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmRemove = false }) { Text("Cancel") }
+                },
+            )
+        }
         Box(
             Modifier
                 .align(Alignment.BottomStart)
