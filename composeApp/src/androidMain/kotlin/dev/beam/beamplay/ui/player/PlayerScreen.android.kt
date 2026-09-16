@@ -154,6 +154,8 @@ actual fun BeamPlayerScreen(
 
     var audioTracks by remember { mutableStateOf<List<PlayerTrack>>(emptyList()) }
     var textTracks by remember { mutableStateOf<List<PlayerTrack>>(emptyList()) }
+    var audioApplied by remember { mutableStateOf(false) }
+
     var sheet by remember { mutableStateOf<SheetKind?>(null) }
     var tab by remember { mutableStateOf(0) }
     var captionScale by remember { mutableFloatStateOf(1f) }
@@ -162,6 +164,16 @@ actual fun BeamPlayerScreen(
     val videoKey = title + "|" + streamUrl
     // Resume records are keyed on the stable source link when we have one.
     val storeKey = if (resumeKey.isBlank()) streamUrl else resumeKey
+
+    // The audio language chosen for THIS stream, re-applied the moment the
+    // tracks appear, so reopening a film keeps the language you picked.
+    fun applySavedAudio(exo: ExoPlayer, tracks: List<PlayerTrack>) {
+        if (audioApplied || tracks.isEmpty()) return
+        val saved = SubtitlePrefs.loadAudio(appCtx, storeKey) ?: return
+        val match = tracks.firstOrNull { it.id == saved } ?: return
+        audioApplied = true
+        selectTrack(exo, C.TRACK_TYPE_AUDIO, match.id)
+    }
     var subtitleStyle by remember {
         mutableStateOf(SubtitlePrefs.load(appCtx).copy(syncMs = SubtitlePrefs.loadSync(appCtx, videoKey)))
     }
@@ -236,10 +248,18 @@ actual fun BeamPlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) durationMs = exo.duration.coerceAtLeast(0)
-                refreshTracks(exo) { a, t -> audioTracks = a; textTracks = t }
+                refreshTracks(exo) { a, t ->
+                    audioTracks = a
+                    textTracks = t
+                    applySavedAudio(exo, a)
+                }
             }
             override fun onTracksChanged(tracks: Tracks) {
-                refreshTracks(exo) { a, t -> audioTracks = a; textTracks = t }
+                refreshTracks(exo) { a, t ->
+                    audioTracks = a
+                    textTracks = t
+                    applySavedAudio(exo, a)
+                }
             }
             override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                 currentCues = cueGroup.cues
@@ -710,7 +730,10 @@ actual fun BeamPlayerScreen(
                 onSpeed = { s -> speed = s; boost = false; player?.setPlaybackSpeed(s) },
                 audioTracks = audioTracks,
                 textTracks = textTracks,
-                onSelectAudio = { t -> player?.let { p -> selectTrack(p, C.TRACK_TYPE_AUDIO, t.id) } },
+                onSelectAudio = { t ->
+                    player?.let { p -> selectTrack(p, C.TRACK_TYPE_AUDIO, t.id) }
+                    SubtitlePrefs.saveAudio(appCtx, storeKey, t.id)
+                },
                 onSelectText = { t -> player?.let { p -> selectTrack(p, C.TRACK_TYPE_TEXT, t.id) } },
                 captionScale = captionScale,
                 onCaptionScale = { captionScale = it },
@@ -1419,6 +1442,14 @@ internal object SubtitlePrefs {
     fun saveSync(ctx: android.content.Context, key: String, ms: Int) {
         prefs(ctx).edit().putInt("sync:" + key.hashCode(), ms).apply()
     }
+
+    /** Audio track id remembered for one stream (per video, like the web app). */
+    fun saveAudio(ctx: android.content.Context, key: String, id: String) {
+        prefs(ctx).edit().putString("audio:" + key.hashCode(), id).apply()
+    }
+
+    fun loadAudio(ctx: android.content.Context, key: String): String? =
+        prefs(ctx).getString("audio:" + key.hashCode(), null)
 
     fun save(ctx: android.content.Context, s: SubtitleStyle) {
         prefs(ctx).edit()
