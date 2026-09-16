@@ -339,7 +339,7 @@ actual fun BeamPlayerScreen(
                 val tPlayer = tickPos - subtitleStyle.syncMs
                 val t = tPlayer + vttOffset
                 val fromVtt = set?.firstOrNull { t >= it.start && t <= it.end }?.text
-                android.util.Log.d("BeamSync", "tick=" + tickPos + " off=" + vttOffset + " sync=" + subtitleStyle.syncMs + " matched=" + (fromVtt != null))
+                android.util.Log.d("BeamSync", "tick=" + tickPos + " off=" + vttOffset + " sync=" + subtitleStyle.syncMs + " matched=" + (fromVtt != null) + " shown=[" + (mediaLine?.replace("\n", " | ")?.take(34) ?: "null") + "] nearestVtt=[" + (set?.minByOrNull { kotlin.math.abs(it.start - (tickPos + vttOffset)) }?.let { it.start.toString() + " :: " + it.text.replace("\n", " ").take(34) } ?: "null") + "]")
                 val fromBuf = cueBuffer.lastOrNull { tPlayer >= it.second && tPlayer < it.third }?.first
                 fromVtt ?: fromBuf ?: mediaLine
             }
