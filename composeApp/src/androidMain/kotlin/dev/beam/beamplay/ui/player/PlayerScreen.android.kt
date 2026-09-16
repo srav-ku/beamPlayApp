@@ -22,7 +22,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -69,6 +71,7 @@ import kotlin.math.roundToInt
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -115,6 +118,10 @@ import kotlinx.coroutines.delay
 
 private val SPEED_STEPS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 private const val AUTO_HIDE_MS = 5000L
+
+// Forced ratios need a real aspect box, not an ExoPlayer resize mode.
+private const val ASPECT_16_9 = -2
+private const val ASPECT_4_3 = -3
 
 /** Text shadow used by every overlay label (black .7, blur 4, offset 0/1). */
 private val OverlayShadow = Shadow(
@@ -201,6 +208,11 @@ actual fun BeamPlayerScreen(
     var vttOffset by remember { mutableStateOf(0L) }
 
     var zoom by remember { mutableFloatStateOf(1f) }
+    // Brightness / volume readout shown while dragging.
+    var statusPill by remember { mutableStateOf<String?>(null) }
+    var dragSide by remember { mutableIntStateOf(0) }
+    var brightStart by remember { mutableFloatStateOf(0.5f) }
+    var volStart by remember { mutableIntStateOf(0) }
     var scrubbing by remember { mutableStateOf(false) }
     var showRemaining by remember { mutableStateOf(PlayerPrefs.showRemaining(appCtx)) }
     var scrubPosition by remember { mutableLongStateOf(0L) }
@@ -245,6 +257,7 @@ actual fun BeamPlayerScreen(
         exo.setMediaItem(builder.build())
         // Speed is remembered per video: movie A can sit at 2x while movie B stays 1x.
         SubtitlePrefs.loadSpeed(appCtx, storeKey)?.let { saved -> speed = saved }
+        SubtitlePrefs.loadAspect(appCtx, storeKey)?.let { saved -> resizeMode = saved }
         exo.setPlaybackSpeed(speed)
         exo.prepare()
         exo.playWhenReady = true
@@ -300,6 +313,8 @@ actual fun BeamPlayerScreen(
              exo.release()
          }
     }
+    LaunchedEffect(statusPill) { if (statusPill != null) { delay(1000); statusPill = null } }
+
     LaunchedEffect(subtitleStyle, playerView) {
         playerView?.subtitleView?.let { applyCaptionStyle(it, subtitleStyle) }
     }
@@ -338,7 +353,9 @@ actual fun BeamPlayerScreen(
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
-            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = zoom, scaleY = zoom),
+            modifier = (if (resizeMode == ASPECT_16_9) Modifier.aspectRatio(16f / 9f)
+                else if (resizeMode == ASPECT_4_3) Modifier.aspectRatio(4f / 3f)
+                else Modifier.fillMaxSize()).graphicsLayer(scaleX = zoom, scaleY = zoom),
             factory = { ctx ->
                 PlayerView(ctx).also { playerView = it }.apply {
                     useController = false
@@ -348,7 +365,7 @@ actual fun BeamPlayerScreen(
             },
             update = { v ->
                 v.player = player
-                v.resizeMode = resizeMode
+                v.resizeMode = if (resizeMode < 0) AspectRatioFrameLayout.RESIZE_MODE_FIT else resizeMode
                 v.subtitleView?.let { applyCaptionStyle(it, subtitleStyle) }
             },
         )
@@ -483,7 +500,43 @@ actual fun BeamPlayerScreen(
                             zoom = (zoom * zoomChange).coerceIn(1f, 3f)
                         }
                     }
-                    .pointerInput(Unit) {
+                    .pointerInput(boost) {
+                        // Skipped while boosting so the hold-to-boost drag keeps the finger.
+                        if (boost) return@pointerInput
+                        detectVerticalDragGestures(
+                            onDragStart = { offset ->
+                                dragSide = if (offset.x < size.width / 2f) 1 else 2
+                                if (dragSide == 1) {
+                                    val current = activity?.window?.attributes?.screenBrightness ?: -1f
+                                    brightStart = if (current < 0f) 0.5f else current
+                                } else {
+                                    val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                                    volStart = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                                }
+                            },
+                            onVerticalDrag = { _, dy ->
+                                val height = size.height.toFloat().coerceAtLeast(1f)
+                                if (dragSide == 1) {
+                                    val next = (brightStart - dy / height * 1.2f).coerceIn(0.02f, 1f)
+                                    activity?.window?.let { w ->
+                                        val lp = w.attributes
+                                        lp.screenBrightness = next
+                                        w.attributes = lp
+                                    }
+                                    statusPill = "\u2600 " + (next * 100).roundToInt() + "%"
+                                } else {
+                                    val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                                    val moved = (-dy / height * max).roundToInt()
+                                    val next = (volStart + moved).coerceIn(0, max)
+                                    am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, next, 0)
+                                    statusPill = "\uD83D\uDD0A " + next + "/" + max
+                                }
+                            },
+                            onDragEnd = { },
+                            onDragCancel = { },
+                        )
+                    }                    .pointerInput(Unit) {
                         // MX Player style: hold to boost, drag sideways to tune it,
                         // release to drop straight back to the chosen speed.
                         detectDragGesturesAfterLongPress(
@@ -535,6 +588,31 @@ actual fun BeamPlayerScreen(
                 )
             }
         }
+
+        statusPill?.let { label ->
+
+            Box(
+
+                Modifier
+
+                    .align(Alignment.TopCenter)
+
+                    .padding(top = 26.dp)
+
+                    .clip(RoundedCornerShape(999.dp))
+
+                    .background(Color(0x99000000))
+
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+
+            ) {
+
+                Text(text = label, color = Color.White, fontSize = 13.sp, fontFamily = GeistMono)
+
+            }
+
+        }
+
 
         if (isBuffering && playbackError == null) {
             CircularProgressIndicator(
@@ -774,7 +852,10 @@ actual fun BeamPlayerScreen(
                 // The "more" list only switches the tab; make it actually open that pane.
                 onTab = { t -> tab = t; sheet = SheetKind.Settings },
                 resizeMode = resizeMode,
-                onResize = { resizeMode = it },
+                onResize = {
+                    resizeMode = it
+                    SubtitlePrefs.saveAspect(appCtx, storeKey, it)
+                },
                 onPip = { activity?.let { enterPip(it) } },
                 onLock = { locked = true; sheet = null },
                 onDismiss = { sheet = null },
@@ -989,12 +1070,11 @@ private fun PlayerSettingsSheet(
 
                     tab == 3 -> {
                         listOf(
-                            "Fit (default)" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
-                            "Fill" to AspectRatioFrameLayout.RESIZE_MODE_FILL,
-                            "Crop" to AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-                            "Stretch" to AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT,
-                            "16:9" to AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
-                        ).forEach { (label, mode) ->
+                            "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                            "Fill (crop)" to AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
+                            "Stretch" to AspectRatioFrameLayout.RESIZE_MODE_FILL,
+                            "16:9" to ASPECT_16_9,
+                            "4:3" to ASPECT_4_3,                        ).forEach { (label, mode) ->
                             ModalRow(label, resizeMode == mode) { onResize(mode); onDismiss() }
                         }
                     }
@@ -1249,6 +1329,8 @@ private fun fmtSpeed(speed: Float): String {
 }
 
 private fun aspectLabel(mode: Int): String = when (mode) {
+    ASPECT_16_9 -> "16:9"
+    ASPECT_4_3 -> "4:3"
     AspectRatioFrameLayout.RESIZE_MODE_FIT -> "Fit"
     AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Stretch"
     AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Crop"
@@ -1470,6 +1552,17 @@ internal object SubtitlePrefs {
 
     fun saveSync(ctx: android.content.Context, key: String, ms: Int) {
         prefs(ctx).edit().putInt("sync:" + key.hashCode(), ms).apply()
+    }
+
+    /** Aspect ratio remembered per stream. */
+    fun saveAspect(ctx: android.content.Context, key: String, mode: Int) {
+        prefs(ctx).edit().putInt("aspect:" + key.hashCode(), mode).apply()
+    }
+
+    fun loadAspect(ctx: android.content.Context, key: String): Int? {
+        val p = prefs(ctx)
+        val k = "aspect:" + key.hashCode()
+        return if (p.contains(k)) p.getInt(k, AspectRatioFrameLayout.RESIZE_MODE_FIT) else null
     }
 
     /** Hold-to-boost speed: shared by every video, changed by dragging. */
