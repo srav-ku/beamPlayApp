@@ -98,8 +98,18 @@ internal object PlaybackStore {
         val p = prefs(ctx)
         return ids(ctx)
             .mapNotNull { id -> p.getString(id, null)?.let { parse(id, it) } }
+            .filter { !it.key.contains('|') }
             .sortedByDescending { it.updatedAt }
     }
+
+    /** Artwork path for a stream, remembered so Continue Watching has thumbnails. */
+    fun putArt(ctx: Context, url: String, art: String?) {
+        if (url.isBlank() || art.isNullOrBlank()) return
+        prefs(ctx).edit().putString("a_" + Integer.toHexString(url.hashCode()), art).apply()
+    }
+
+    private fun artFor(ctx: Context, url: String): String? =
+        prefs(ctx).getString("a_" + Integer.toHexString(url.hashCode()), null)
 
     fun continueItems(ctx: Context): List<ContinueItem> =
         continueWatching(ctx).map {

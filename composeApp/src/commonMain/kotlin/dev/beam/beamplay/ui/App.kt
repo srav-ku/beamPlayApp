@@ -112,7 +112,9 @@ private fun AppNavHost() {
     val current = backStack.lastOrNull()
 
     when {
-        request != null -> BeamPlayerScreen(
+                request != null -> {
+            androidx.compose.runtime.LaunchedEffect(request.url) { rememberContinueArt(request.url, request.art) }
+            BeamPlayerScreen(
             title = request.title,
             streamUrl = request.url,
             subtitles = request.subtitles,
@@ -120,18 +122,19 @@ private fun AppNavHost() {
             onBack = { playback = null },
             onProgress = { _, _ -> },
         )
+        }
 
         current == null -> MainScreen(
             onOpenMedia = { backStack = backStack + it },
             subtitleSettings = { BeamSubtitleSettingsScreen() },
-            onResumeContinue = { ci -> playback = PlaybackRequest(ci.title, ci.streamUrl, emptyList()) },
+            onResumeContinue = { ci -> playback = PlaybackRequest(ci.title, ci.streamUrl, emptyList(), ci.art) },
         )
 
         else -> BeamDetailScreen(
             item = current,
             onBack = { backStack = backStack.dropLast(1) },
             onOpenMedia = { backStack = backStack + it },
-            onPlay = { url, subs -> playback = PlaybackRequest(current.title, url, subs) },
+            onPlay = { url, subs -> playback = PlaybackRequest(current.title, url, subs, current.backdrop_path ?: current.poster_path) },
         )
     }
 }
@@ -140,4 +143,6 @@ private data class PlaybackRequest(
     val title: String,
     val url: String,
     val subtitles: List<PlayerSubtitle>,
+    val art: String? = null,
 )
+

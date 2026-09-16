@@ -221,8 +221,8 @@ actual fun BeamPlayerScreen(
         exo.prepare()
         exo.playWhenReady = true
          val resumeAt = if (startPositionMs > 0L) startPositionMs
-             else if (PlaybackStore.isCompleted(appCtx, videoKey)) 0L
-             else PlaybackStore.resumeMs(appCtx, videoKey)
+             else if (PlaybackStore.isCompleted(appCtx, streamUrl)) 0L
+             else PlaybackStore.resumeMs(appCtx, streamUrl)
          if (resumeAt > 0L) exo.seekTo(resumeAt)
         player = exo
 
@@ -256,9 +256,9 @@ actual fun BeamPlayerScreen(
              val pos = exo.currentPosition
              val dur = exo.duration.coerceAtLeast(0L)
              if (PlaybackStore.isFinished(pos, dur)) {
-                 PlaybackStore.markCompleted(appCtx, videoKey, title, dur)
+                 PlaybackStore.markCompleted(appCtx, streamUrl, title, dur)
              } else if (pos >= 3_000L) {
-                 PlaybackStore.saveProgress(appCtx, videoKey, title, pos, dur)
+                 PlaybackStore.saveProgress(appCtx, streamUrl, title, pos, dur)
              }
              exo.removeListener(listener)
              exo.release()
@@ -285,7 +285,7 @@ actual fun BeamPlayerScreen(
              if (durationMs > 0) {
                  val cp = player?.currentPosition ?: positionMs
                  onProgress(cp, durationMs)
-                 PlaybackStore.saveProgress(appCtx, videoKey, title, cp, durationMs)
+                 PlaybackStore.saveProgress(appCtx, streamUrl, title, cp, durationMs)
              }
          }
     }

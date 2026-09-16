@@ -578,6 +578,8 @@ fun ContinueWatchingResumeCard(
         else -> "less than a minute left"
     }
 
+    val imageUrl = item.art?.takeIf { it.isNotBlank() }?.let { Api.backdropUrl(it, "w500") }
+
     Box(
         modifier = modifier
             .width(250.dp)
@@ -586,11 +588,20 @@ fun ContinueWatchingResumeCard(
             .background(Color(0xFF17171C))
             .clickable(onClick = onClick),
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(0xFF1C1C22), Color(0xFF131318)))),
-        )
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = item.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(Color(0xFF1C1C22), Color(0xFF131318)))),
+                )
+            }
         Box(
             Modifier
                 .fillMaxSize()
