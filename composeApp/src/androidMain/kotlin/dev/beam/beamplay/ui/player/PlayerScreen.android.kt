@@ -12,6 +12,8 @@ import dev.beam.beamplay.core.ui.theme.GeistMono
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -110,7 +112,7 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 
 private val SPEED_STEPS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
-private const val AUTO_HIDE_MS = 3000L
+private const val AUTO_HIDE_MS = 5000L
 
 /** Text shadow used by every overlay label (black .7, blur 4, offset 0/1). */
 private val OverlayShadow = Shadow(
@@ -179,7 +181,8 @@ actual fun BeamPlayerScreen(
 
     var zoom by remember { mutableFloatStateOf(1f) }
     var scrubbing by remember { mutableStateOf(false) }
-    var showRemaining by remember { mutableStateOf(false) }
+    var showRemaining by remember { mutableStateOf(PlayerPrefs.showRemaining(appCtx)) }
+    var skipFlash by remember { mutableStateOf<String?>(null) }
     var scrubPosition by remember { mutableLongStateOf(0L) }
     var gesture by remember { mutableStateOf<String?>(null) }
 
@@ -301,6 +304,8 @@ actual fun BeamPlayerScreen(
     }
 
     LaunchedEffect(gesture) { if (gesture != null) { delay(1000); gesture = null } }
+
+    LaunchedEffect(skipFlash) { if (skipFlash != null) { delay(750); skipFlash = null } }
 
     val shownPosition = if (scrubbing) scrubPosition else positionMs
 
@@ -434,13 +439,16 @@ actual fun BeamPlayerScreen(
                                 when {
                                     offset.x < third -> {
                                         player?.let { it.seekTo((it.currentPosition - 10_000).coerceAtLeast(0)) }
-                                        gesture = "\u23EA 10s"
+                                        skipFlash = "L"
                                     }
                                     offset.x > third * 2 -> {
                                         player?.let { it.seekTo(it.currentPosition + 10_000) }
-                                        gesture = "10s \u23E9"
+                                        skipFlash = "R"
                                     }
-                                    else -> controlsVisible = !controlsVisible
+                                    else -> {
+                                        player?.let { if (it.isPlaying) it.pause() else it.play() }
+                                        skipFlash = "C"
+                                    }
                                 }
                             },
                             onLongPress = {
@@ -458,12 +466,85 @@ actual fun BeamPlayerScreen(
             )
         }
 
+        // ---- Skip flash: dims the tapped half, with a circular 10s indicator ----
+        skipFlash?.let { side ->
+            val isLeft = side == "L"
+            val isCentre = side == "C"
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .fillMaxHeight()
+                    .fillMaxWidth(if (isCentre) 0.36f else 0.44f)
+                    .offset(x = if (isCentre) 0.dp else if (isLeft) -110.dp else 110.dp)
+                    .background(
+                        if (isCentre) {
+                            Brush.horizontalGradient(listOf(Color(0x59000000), Color(0x59000000)))
+                        } else if (isLeft) {
+                            Brush.horizontalGradient(listOf(Color(0x73000000), Color.Transparent))
+                        } else {
+                            Brush.horizontalGradient(listOf(Color.Transparent, Color(0x73000000)))
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isCentre) {
+                    Box(
+                        Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x66000000)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(38.dp),
+                        )
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x66000000)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = if (isLeft) Icons.Filled.Replay10 else Icons.Filled.Forward10,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(42.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = if (isLeft) "10 seconds back" else "10 seconds forward",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+        }
+
         if (isBuffering && playbackError == null) {
-            CircularProgressIndicator(
-                color = Color.White,
-                strokeWidth = 2.5.dp,
-                modifier = Modifier.align(Alignment.Center).size(52.dp),
-            )
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x73000000)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 2.5.dp,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
         }
 
         playbackError?.let { code ->
@@ -618,6 +699,7 @@ actual fun BeamPlayerScreen(
                     ThinSeekBar(
                         position = shownPosition,
                         duration = durationMs,
+                        buffered = bufferedMs,
                         onScrub = { fraction ->
                             scrubbing = true
                             scrubPosition = (fraction * durationMs).toLong()
@@ -654,7 +736,11 @@ actual fun BeamPlayerScreen(
                                 maxLines = 1,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .clickable { showRemaining = !showRemaining }
+                                    .clickable {
+                                        val next = !showRemaining
+                                        showRemaining = next
+                                        PlayerPrefs.setShowRemaining(appCtx, next)
+                                    }
                                     .padding(horizontal = 4.dp, vertical = 4.dp),
                             )
                         }
@@ -772,11 +858,13 @@ private fun BarIcon(
 private fun ThinSeekBar(
     position: Long,
     duration: Long,
+    buffered: Long = 0L,
     onScrub: (Float) -> Unit,
     onSeek: (Float) -> Unit,
 ) {
     var dragFraction by remember { mutableFloatStateOf(-1f) }
     val played = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val bufferedFraction = if (duration > 0L) (buffered.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val shown = if (dragFraction >= 0f) dragFraction else played
 
     Box(
@@ -814,6 +902,15 @@ private fun ThinSeekBar(
                 size = Size(size.width, trackH),
                 cornerRadius = r,
             )
+            // Buffered ahead: lighter section for what is already downloaded.
+            if (bufferedFraction > 0f) {
+                drawRoundRect(
+                    color = Color(0x8CFFFFFF),
+                    topLeft = Offset(0f, cy - trackH / 2f),
+                    size = Size(size.width * bufferedFraction, trackH),
+                    cornerRadius = r,
+                )
+            }
             if (shown > 0f) {
                 drawRoundRect(
                     color = Color(0xFFF5A623),
@@ -1428,5 +1525,21 @@ internal object SubtitlePrefs {
             bgStyle = p.getString("bgStyle", "Shadow") ?: "Shadow",
             fontFamily = p.getString("fontFamily", "Default") ?: "Default",
         )
+    }
+}
+
+/** Player preferences that must outlive a single video. */
+internal object PlayerPrefs {
+    private const val FILE = "beam_player_prefs"
+
+    private fun prefs(ctx: android.content.Context) =
+        ctx.applicationContext.getSharedPreferences(FILE, android.content.Context.MODE_PRIVATE)
+
+    /** true = show time remaining, false = show full duration. */
+    fun showRemaining(ctx: android.content.Context): Boolean =
+        prefs(ctx).getBoolean("show_remaining", false)
+
+    fun setShowRemaining(ctx: android.content.Context, value: Boolean) {
+        prefs(ctx).edit().putBoolean("show_remaining", value).apply()
     }
 }
