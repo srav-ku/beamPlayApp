@@ -168,6 +168,11 @@ actual fun BeamPlayerScreen(
     val storeKey = if (resumeKey.isBlank()) streamUrl else resumeKey
     // Hold-to-boost speed: one value for the whole app, remembered.
     var boostSpeed by remember { mutableFloatStateOf(SubtitlePrefs.boostSpeed(appCtx)) }
+    // Drag maths: the boosted value is derived from TOTAL finger travel from the
+    // press point, never from the previous value. That removes drift, stops it
+    // running away at 0.1-per-jitter, and keeps it reversible.
+    var boostBase by remember { mutableFloatStateOf(2f) }
+    var boostTravel by remember { mutableFloatStateOf(0f) }
 
     // The audio language chosen for THIS stream, re-applied the moment the
     // tracks appear, so reopening a film keeps the language you picked.
@@ -484,6 +489,8 @@ actual fun BeamPlayerScreen(
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
                                 boost = true
+                                boostBase = boostSpeed
+                                boostTravel = 0f
                                 player?.setPlaybackSpeed(boostSpeed)
                             },
                             onDragEnd = {
@@ -495,10 +502,16 @@ actual fun BeamPlayerScreen(
                                 player?.setPlaybackSpeed(speed)
                             },
                             onDrag = { _, dragAmount ->
-                                val stepped = ((boostSpeed + dragAmount.x / 110f) * 10f).roundToInt() / 10f
-                                boostSpeed = stepped.coerceIn(0.5f, 4f)
-                                player?.setPlaybackSpeed(boostSpeed)
-                                SubtitlePrefs.setBoostSpeed(appCtx, boostSpeed)
+                                boostTravel += dragAmount.x
+                                // ~1.6 px per 0.01x: half a second of travel either way is
+                                // about 0.15x, a full comfortable swipe spans the range.
+                                val raw = boostBase + boostTravel / 160f
+                                val stepped = (raw * 10f).roundToInt() / 10f
+                                if (stepped != boostSpeed) {
+                                    boostSpeed = stepped.coerceIn(0.5f, 4f)
+                                    player?.setPlaybackSpeed(boostSpeed)
+                                    SubtitlePrefs.setBoostSpeed(appCtx, boostSpeed)
+                                }
                             },
                         )
                     },
