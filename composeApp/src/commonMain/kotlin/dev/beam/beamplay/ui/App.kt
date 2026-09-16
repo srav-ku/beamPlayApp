@@ -124,6 +124,7 @@ private fun AppNavHost() {
         current == null -> MainScreen(
             onOpenMedia = { backStack = backStack + it },
             subtitleSettings = { BeamSubtitleSettingsScreen() },
+            onResumeContinue = { ci -> playback = PlaybackRequest(ci.title, ci.streamUrl, emptyList()) },
         )
 
         else -> BeamDetailScreen(

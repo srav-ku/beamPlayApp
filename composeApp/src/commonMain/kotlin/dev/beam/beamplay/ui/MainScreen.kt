@@ -247,7 +247,7 @@ fun RequestModalDialog(
 }
 
 @Composable
-fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}) {
+fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}) {
     var tab by remember { mutableStateOf(initialTab) }
     var requestItem by remember { mutableStateOf<MediaItem?>(null) }
     var isCheckingDb by remember { mutableStateOf(false) }
@@ -282,7 +282,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
         ) {
             Box(Modifier.weight(1f)) {
                 when (tab) {
-                    Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search })
+                    Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search }, onResumeContinue = onResumeContinue)
                     Tab.Movies -> CatalogTab(kind = "movies", handleCardClick)
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
                     Tab.Search -> SearchTab(handleCardClick)
@@ -318,7 +318,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
 }
 
 @Composable
-private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit = {}) {
+private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}) {
     var trendingTab by remember { mutableStateOf("Movie") }
     var latestTab by remember { mutableStateOf("Movie") }
     var topRatedTab by remember { mutableStateOf("Movie") }
@@ -417,6 +417,29 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                 val latestItems = if (latestTab == "Movie") nowPlayingMovies else airingTodaySeries
                 val topRatedItems = if (topRatedTab == "Movie") topRatedMovies else topRatedSeries
                 val popularItems = if (popularTab == "Movie") popularMovies else popularSeries
+
+                // Continue Watching - locally remembered streams, no network.
+                val resumeItems = localContinueWatching()
+                if (resumeItems.isNotEmpty()) {
+                    item {
+                        HomeSection(title = "Continue Watching") {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                itemsIndexed(
+                                    items = resumeItems,
+                                    key = { idx, ci -> "cw_" + ci.streamUrl + "_" + idx },
+                                ) { _, ci ->
+                                    ContinueWatchingResumeCard(
+                                        item = ci,
+                                        onClick = { onResumeContinue(ci) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Trending â€” rank-numbered backdrop cards, Movie / TV Show tabs.
                 if (trendingItems.isNotEmpty()) {

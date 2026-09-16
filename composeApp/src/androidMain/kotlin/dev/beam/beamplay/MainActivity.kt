@@ -27,6 +27,10 @@ class MainActivity : ComponentActivity() {
         // VidaraApi) on first frame.
         initServices(isDebug = BuildConfig.DEBUG)
 
+        // Beams the app context to common code so the local playback
+        // memory (resume points / continue watching) can be read there.
+        dev.beam.beamplay.ui.AppContextHolder.ctx = applicationContext
+
         setContent {
             App(AndroidSessionStore(applicationContext))
         }

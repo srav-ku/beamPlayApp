@@ -550,3 +550,113 @@ fun ErrorBlock(message: String) {
         )
     }
 }
+
+/**
+ * Continue Watching card.
+ *
+ * Same footprint and corners as the trending cards, with the bottom gradient
+ * kept for the title block. The offline store has no artwork, so the thumbnail
+ * is a neutral placeholder rather than a broken image; the accent progress bar
+ * shows exactly how far the viewer got.
+ */
+@Composable
+fun ContinueWatchingResumeCard(
+    item: ContinueItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val fraction = if (item.durationMs > 0L) {
+        (item.positionMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val remaining = ((item.durationMs - item.positionMs) / 1000L).coerceAtLeast(0L)
+    val remainingLabel = when {
+        item.durationMs <= 0L -> "Resume"
+        remaining >= 3600L -> "${remaining / 3600L}h ${(remaining % 3600L) / 60L}m left"
+        remaining >= 60L -> "${remaining / 60L} min left"
+        else -> "less than a minute left"
+    }
+
+    Box(
+        modifier = modifier
+            .width(250.dp)
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF17171C))
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color(0xFF1C1C22), Color(0xFF131318)))),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Transparent,
+                        0.45f to Color(0x33000000),
+                        1.0f to Color(0xEE000000),
+                    ),
+                ),
+        )
+
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Color(0x99000000)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = "Resume",
+                tint = Color.White,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+        ) {
+            Text(
+                text = item.title,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(0.9f),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = remainingLabel,
+                color = Color(0xFFB6B6C0),
+                fontFamily = GeistMono,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        Box(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color(0x33FFFFFF)),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .background(Color(0xFFF5A623)),
+            )
+        }
+    }
+}

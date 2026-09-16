@@ -1,6 +1,7 @@
 package dev.beam.beamplay.ui.player
 
 import android.content.Context
+import dev.beam.beamplay.ui.ContinueItem
 import org.json.JSONObject
 
 /**
@@ -99,6 +100,17 @@ internal object PlaybackStore {
             .mapNotNull { id -> p.getString(id, null)?.let { parse(id, it) } }
             .sortedByDescending { it.updatedAt }
     }
+
+    fun continueItems(ctx: Context): List<ContinueItem> =
+        continueWatching(ctx).map {
+            ContinueItem(
+                title = it.title.ifBlank { "Untitled" },
+                streamUrl = it.key,
+                positionMs = it.positionMs,
+                durationMs = it.durationMs,
+                updatedAt = it.updatedAt,
+            )
+        }
 
     private fun parse(fallbackKey: String, raw: String): Entry? = try {
         val o = JSONObject(raw)
