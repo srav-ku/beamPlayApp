@@ -63,7 +63,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.DisposableEffect
+import kotlin.math.roundToInt
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -164,6 +166,8 @@ actual fun BeamPlayerScreen(
     val videoKey = title + "|" + streamUrl
     // Resume records are keyed on the stable source link when we have one.
     val storeKey = if (resumeKey.isBlank()) streamUrl else resumeKey
+    // Hold-to-boost speed: one value for the whole app, remembered.
+    var boostSpeed by remember { mutableFloatStateOf(SubtitlePrefs.boostSpeed(appCtx)) }
 
     // The audio language chosen for THIS stream, re-applied the moment the
     // tracks appear, so reopening a film keeps the language you picked.
@@ -467,19 +471,57 @@ actual fun BeamPlayerScreen(
                                     }
                                 }
                             },
-                            onLongPress = {
-                                boost = !boost
-                                player?.setPlaybackSpeed(if (boost) 2f else speed)
-                                gesture = if (boost) "2.0x boost" else "Boost off"
-                            },
+
                         )
                     }
                     .pointerInput(Unit) {
                         detectTransformGestures { _, _, zoomChange, _ ->
                             zoom = (zoom * zoomChange).coerceIn(1f, 3f)
                         }
+                    }
+                    .pointerInput(Unit) {
+                        // MX Player style: hold to boost, drag sideways to tune it,
+                        // release to drop straight back to the chosen speed.
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                boost = true
+                                player?.setPlaybackSpeed(boostSpeed)
+                            },
+                            onDragEnd = {
+                                boost = false
+                                player?.setPlaybackSpeed(speed)
+                            },
+                            onDragCancel = {
+                                boost = false
+                                player?.setPlaybackSpeed(speed)
+                            },
+                            onDrag = { _, dragAmount ->
+                                val stepped = ((boostSpeed + dragAmount.x / 110f) * 10f).roundToInt() / 10f
+                                boostSpeed = stepped.coerceIn(0.5f, 4f)
+                                player?.setPlaybackSpeed(boostSpeed)
+                                SubtitlePrefs.setBoostSpeed(appCtx, boostSpeed)
+                            },
+                        )
                     },
             )
+        }
+
+        if (boost) {
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 26.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color(0x99000000))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = fmtSpeed(boostSpeed) + "  \u00b7  drag sideways to change",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = GeistMono,
+                )
+            }
         }
 
         if (isBuffering && playbackError == null) {
@@ -1448,6 +1490,14 @@ internal object SubtitlePrefs {
 
     fun saveSync(ctx: android.content.Context, key: String, ms: Int) {
         prefs(ctx).edit().putInt("sync:" + key.hashCode(), ms).apply()
+    }
+
+    /** Hold-to-boost speed: shared by every video, changed by dragging. */
+    fun boostSpeed(ctx: android.content.Context): Float =
+        prefs(ctx).getFloat("boost_speed", 2f)
+
+    fun setBoostSpeed(ctx: android.content.Context, value: Float) {
+        prefs(ctx).edit().putFloat("boost_speed", value).apply()
     }
 
     /** Playback speed remembered for one stream (per video). */
