@@ -199,7 +199,7 @@ actual fun BeamPlayerScreen(
     var scrubbing by remember { mutableStateOf(false) }
     var showRemaining by remember { mutableStateOf(PlayerPrefs.showRemaining(appCtx)) }
     var scrubPosition by remember { mutableLongStateOf(0L) }
-    var gesture by remember { mutableStateOf<String?>(null) }
+
 
     // ---- Immersive: hide system bars so nothing collides with the phone UI ----
     DisposableEffect(Unit) {
@@ -328,7 +328,6 @@ actual fun BeamPlayerScreen(
         }
     }
 
-    LaunchedEffect(gesture) { if (gesture != null) { delay(1000); gesture = null } }
 
     val shownPosition = if (scrubbing) scrubPosition else positionMs
 
@@ -516,7 +515,7 @@ actual fun BeamPlayerScreen(
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
                 Text(
-                    text = fmtSpeed(boostSpeed) + "  \u00b7  drag sideways to change",
+                    text = fmtSpeed(boostSpeed),
                     color = Color.White,
                     fontSize = 12.sp,
                     fontFamily = GeistMono,
@@ -555,39 +554,7 @@ actual fun BeamPlayerScreen(
             }
         }
 
-        // gesture pill
-        gesture?.let { label ->
-            Box(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 26.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x99000000))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    text = label,
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    style = TextStyle(shadow = OverlayShadow),
-                )
-            }
-        }
 
-        // boost badge
-        if (boost) {
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 60.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0x99000000))
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            ) {
-                Text("2.0x boost", color = Color(0xFFFBBF24), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
 
         // locked: only the unlock affordance
         if (locked) {
