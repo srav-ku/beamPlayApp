@@ -669,7 +669,6 @@ actual fun BeamPlayerScreen(
         val alpha by animateFloatAsState(
             targetValue = if (controlsVisible && !locked) 1f else 0f,
             animationSpec = tween(200),
-            animationSpec = tween(200),
             label = "overlay-alpha",
         )
 
