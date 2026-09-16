@@ -156,8 +156,14 @@ actual fun BeamPlayerScreen(
     var captionScale by remember { mutableFloatStateOf(1f) }
     var captionBg by remember { mutableStateOf(true) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    var subtitleStyle by remember { mutableStateOf(SubtitlePrefs.load(appCtx)) }
-    LaunchedEffect(subtitleStyle) { SubtitlePrefs.save(appCtx, subtitleStyle) }
+    val videoKey = title + "|" + streamUrl
+    var subtitleStyle by remember {
+        mutableStateOf(SubtitlePrefs.load(appCtx).copy(syncMs = SubtitlePrefs.loadSync(appCtx, videoKey)))
+    }
+    LaunchedEffect(subtitleStyle) {
+        SubtitlePrefs.save(appCtx, subtitleStyle)
+        SubtitlePrefs.saveSync(appCtx, videoKey, subtitleStyle.syncMs)
+    }
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
     var currentCues by remember { mutableStateOf<List<androidx.media3.common.text.Cue>>(emptyList()) }
     var cueSets by remember { mutableStateOf<List<List<VttCue>>>(emptyList()) }
@@ -339,7 +345,7 @@ actual fun BeamPlayerScreen(
                 val tPlayer = tickPos - subtitleStyle.syncMs
                 val t = tPlayer + vttOffset
                 val fromVtt = set?.firstOrNull { t >= it.start && t <= it.end }?.text
-                android.util.Log.d("BeamSync", "tick=" + tickPos + " off=" + vttOffset + " sync=" + subtitleStyle.syncMs + " matched=" + (fromVtt != null) + " shown=[" + (mediaLine?.replace("\n", " | ")?.take(34) ?: "null") + "] nearestVtt=[" + (set?.minByOrNull { kotlin.math.abs(it.start - (tickPos + vttOffset)) }?.let { it.start.toString() + " :: " + it.text.replace("\n", " ").take(34) } ?: "null") + "]")
+
                 val fromBuf = cueBuffer.lastOrNull { tPlayer >= it.second && tPlayer < it.third }?.first
                 fromVtt ?: fromBuf ?: mediaLine
             }
@@ -904,6 +910,19 @@ private fun PlayerSettingsSheet(
                                 selected = !boost && speed == s,
                             ) { onSpeed(s) }
                         }
+                        SliderRow("CUSTOM SPEED", speed, 0.25f, 2f, fmtSpeed(speed)) { onSpeed(it) }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SyncNudgeButton("\u22120.05x") { onSpeed((speed - 0.05f).coerceIn(0.25f, 2f)) }
+                            SyncNudgeButton("+0.05x") { onSpeed((speed + 0.05f).coerceIn(0.25f, 2f)) }
+                            Spacer(Modifier.weight(1f))
+                            SyncNudgeButton("Reset 1x") { onSpeed(1f) }
+                        }
                     }
 
                     tab == 1 -> {
@@ -1328,13 +1347,20 @@ internal object SubtitlePrefs {
     private fun prefs(ctx: android.content.Context) =
         ctx.getSharedPreferences(NAME, android.content.Context.MODE_PRIVATE)
 
+    /** Per-video subtitle sync, so each title keeps its own offset. */
+    fun loadSync(ctx: android.content.Context, key: String): Int =
+        prefs(ctx).getInt("sync:" + key.hashCode(), 0)
+
+    fun saveSync(ctx: android.content.Context, key: String, ms: Int) {
+        prefs(ctx).edit().putInt("sync:" + key.hashCode(), ms).apply()
+    }
+
     fun save(ctx: android.content.Context, s: SubtitleStyle) {
         prefs(ctx).edit()
             .putBoolean("enabled", s.enabled)
             .putInt("fontPx", s.fontPx)
             .putInt("bgOpacity", s.bgOpacity)
             .putInt("bottomOffsetPx", s.bottomOffsetPx)
-            .putInt("syncMs", s.syncMs)
             .putInt("textColor", s.textColor)
             .putInt("bgColor", s.bgColor)
             .putString("bgStyle", s.bgStyle)
