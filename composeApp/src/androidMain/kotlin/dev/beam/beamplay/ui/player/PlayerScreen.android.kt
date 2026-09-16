@@ -850,7 +850,7 @@ private fun PlayerSettingsSheet(
     ) {
         Column(
             Modifier
-                .fillMaxWidth(0.78f)
+                .fillMaxWidth(0.68f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFF1E1E1E))
                 .clickable(enabled = false) {},
@@ -931,7 +931,7 @@ private fun PlayerSettingsSheet(
                                 }
                             }
                         }
-                        SliderRow("CUSTOM SPEED", speed, 0.25f, 2f, fmtSpeed(speed)) { onSpeed(it) }
+                        SliderRow("CUSTOM SPEED", speed, 0.25f, 4f, fmtSpeed(speed)) { onSpeed(it) }
                         Row(
                             Modifier
                                 .fillMaxWidth()
@@ -939,8 +939,8 @@ private fun PlayerSettingsSheet(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            SyncNudgeButton("\u22120.05x") { onSpeed((speed - 0.05f).coerceIn(0.25f, 2f)) }
-                            SyncNudgeButton("+0.05x") { onSpeed((speed + 0.05f).coerceIn(0.25f, 2f)) }
+                            SyncNudgeButton("\u22120.05x") { onSpeed((speed - 0.05f).coerceIn(0.25f, 4f)) }
+                            SyncNudgeButton("+0.05x") { onSpeed((speed + 0.05f).coerceIn(0.25f, 4f)) }
                             Spacer(Modifier.weight(1f))
                             SyncNudgeButton("Reset 1x") { onSpeed(1f) }
                         }
