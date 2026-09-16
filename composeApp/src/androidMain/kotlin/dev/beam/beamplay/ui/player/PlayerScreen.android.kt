@@ -234,6 +234,8 @@ actual fun BeamPlayerScreen(
         if (subs.isNotEmpty()) builder.setSubtitleConfigurations(subs)
 
         exo.setMediaItem(builder.build())
+        // Speed is remembered per video: movie A can sit at 2x while movie B stays 1x.
+        SubtitlePrefs.loadSpeed(appCtx, storeKey)?.let { saved -> speed = saved }
         exo.setPlaybackSpeed(speed)
         exo.prepare()
         exo.playWhenReady = true
@@ -727,7 +729,12 @@ actual fun BeamPlayerScreen(
                 title = title,
                 speed = speed,
                 boost = boost,
-                onSpeed = { s -> speed = s; boost = false; player?.setPlaybackSpeed(s) },
+                onSpeed = { s ->
+                    speed = s
+                    boost = false
+                    player?.setPlaybackSpeed(s)
+                    SubtitlePrefs.saveSpeed(appCtx, storeKey, s)
+                },
                 audioTracks = audioTracks,
                 textTracks = textTracks,
                 onSelectAudio = { t ->
@@ -1441,6 +1448,17 @@ internal object SubtitlePrefs {
 
     fun saveSync(ctx: android.content.Context, key: String, ms: Int) {
         prefs(ctx).edit().putInt("sync:" + key.hashCode(), ms).apply()
+    }
+
+    /** Playback speed remembered for one stream (per video). */
+    fun saveSpeed(ctx: android.content.Context, key: String, speed: Float) {
+        prefs(ctx).edit().putFloat("speed:" + key.hashCode(), speed).apply()
+    }
+
+    fun loadSpeed(ctx: android.content.Context, key: String): Float? {
+        val p = prefs(ctx)
+        val k = "speed:" + key.hashCode()
+        return if (p.contains(k)) p.getFloat(k, 1f) else null
     }
 
     /** Audio track id remembered for one stream (per video, like the web app). */
