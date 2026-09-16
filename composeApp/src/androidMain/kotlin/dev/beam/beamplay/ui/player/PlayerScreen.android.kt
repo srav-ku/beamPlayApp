@@ -201,7 +201,10 @@ actual fun BeamPlayerScreen(
     }
 
     DisposableEffect(streamUrl) {
-        val exo = ExoPlayer.Builder(context).build()
+         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+             .setBufferDurationsMs(30_000, 300_000, 1_500, 3_000)
+             .build()
+         val exo = ExoPlayer.Builder(context).setLoadControl(loadControl).build()
         val builder = MediaItem.Builder().setUri(streamUrl)
         val subs = subtitles.map { sub ->
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
@@ -217,7 +220,10 @@ actual fun BeamPlayerScreen(
         exo.setPlaybackSpeed(speed)
         exo.prepare()
         exo.playWhenReady = true
-        if (startPositionMs > 0) exo.seekTo(startPositionMs)
+         val resumeAt = if (startPositionMs > 0L) startPositionMs
+             else if (PlaybackStore.isCompleted(appCtx, videoKey)) 0L
+             else PlaybackStore.resumeMs(appCtx, videoKey)
+         if (resumeAt > 0L) exo.seekTo(resumeAt)
         player = exo
 
         val listener = object : Player.Listener {
@@ -246,7 +252,17 @@ actual fun BeamPlayerScreen(
             }
         }
         exo.addListener(listener)
-        onDispose { exo.removeListener(listener); exo.release() }
+         onDispose {
+             val pos = exo.currentPosition
+             val dur = exo.duration.coerceAtLeast(0L)
+             if (PlaybackStore.isFinished(pos, dur)) {
+                 PlaybackStore.markCompleted(appCtx, videoKey, title, dur)
+             } else if (pos >= 3_000L) {
+                 PlaybackStore.saveProgress(appCtx, videoKey, title, pos, dur)
+             }
+             exo.removeListener(listener)
+             exo.release()
+         }
     }
     LaunchedEffect(subtitleStyle, playerView) {
         playerView?.subtitleView?.let { applyCaptionStyle(it, subtitleStyle) }
@@ -264,7 +280,14 @@ actual fun BeamPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        while (true) { delay(5000); if (durationMs > 0) onProgress(positionMs, durationMs) }
+         while (true) {
+             delay(5000)
+             if (durationMs > 0) {
+                 val cp = player?.currentPosition ?: positionMs
+                 onProgress(cp, durationMs)
+                 PlaybackStore.saveProgress(appCtx, videoKey, title, cp, durationMs)
+             }
+         }
     }
 
     LaunchedEffect(controlsVisible, locked, isPlaying, sheet, scrubbing) {
