@@ -329,7 +329,7 @@ ALTER TABLE reports  ADD COLUMN admin_note TEXT;
 -- ============================================================================
 -- VERIFY AFTER RUNNING
 --   SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;
---     -> 16 existing + 15 new = 31 tables
+--     -> 16 existing + 19 new = 35 tables
 --   Row counts MUST be unchanged:
 --     movies 328, series 108, seasons 242, episodes 2732,
 --     movie_links 1688, episode_links 608, download_files 1705, users 4
