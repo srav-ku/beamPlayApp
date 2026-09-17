@@ -145,3 +145,53 @@ FROM plans p, features f WHERE p.code IN ('plus','pro');
 --   SELECT code, max_devices, max_streams FROM plans;
 --   SELECT COUNT(*) FROM plan_features;   -> 24
 -- ============================================================================
+-- ============================================================================
+-- PART 2 - activation without a store (donation / manual / license key)
+-- Append to the same paste, run once.
+-- ============================================================================
+
+-- How a payment becomes an entitlement when there is no Play Billing / Stripe.
+CREATE TABLE IF NOT EXISTS activation_claims (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    platform     TEXT NOT NULL,        -- 'kofi' | 'bmc' | 'patreon' | 'upi' | 'manual'
+    reference    TEXT NOT NULL,        -- their payment reference / email / txn id
+    amount_cents INTEGER,
+    currency     TEXT,
+    days_granted INTEGER NOT NULL DEFAULT 30,
+    status       TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
+    auto_matched INTEGER NOT NULL DEFAULT 0,        -- 1 when a webhook matched it
+    reviewed_by  INTEGER,
+    reviewed_at  INTEGER,
+    note         TEXT,
+    created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE (platform, reference)
+);
+CREATE INDEX IF NOT EXISTS idx_claims_status ON activation_claims (status, created_at DESC);
+
+-- Incoming platform webhooks (Ko-fi / Buy Me a Coffee / Patreon all send these free).
+CREATE TABLE IF NOT EXISTS payment_webhooks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform    TEXT NOT NULL,
+    event_id    TEXT,
+    email       TEXT,
+    amount_cents INTEGER,
+    currency    TEXT,
+    payload     TEXT NOT NULL,
+    matched_user INTEGER,
+    received_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE (platform, event_id)
+);
+
+-- A signed, offline-verifiable key so the app works without calling the server.
+ALTER TABLE subscriptions ADD COLUMN license_key  TEXT;
+ALTER TABLE subscriptions ADD COLUMN issued_at    INTEGER;
+
+-- The owner's own account: flagged instead of pretending to be a customer.
+ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0;
+
+-- ============================================================================
+-- Verify:  SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';
+--   -> 43 + 2 = 45
+--   SELECT name FROM pragma_table_info('users');   -- gains is_owner
+-- ============================================================================
