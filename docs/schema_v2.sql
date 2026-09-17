@@ -211,3 +211,77 @@ ALTER TABLE reports  ADD COLUMN admin_note TEXT;
 --   4. then run it against main
 -- Nothing here deletes or rewrites a single existing row.
 -- ============================================================================
+-- ============================================================================
+-- PART 2 - fields the detail page and the feed need.
+-- Kept separate so the Turso console paste can be done in two passes.
+-- Also additive only.
+-- ============================================================================
+
+-- ── detail page: budget / revenue / popularity / tagline / recommendations ──
+ALTER TABLE movies ADD COLUMN tagline              TEXT;
+ALTER TABLE movies ADD COLUMN budget               INTEGER;
+ALTER TABLE movies ADD COLUMN revenue              INTEGER;
+ALTER TABLE movies ADD COLUMN vote_count           INTEGER;
+ALTER TABLE movies ADD COLUMN popularity           REAL;
+ALTER TABLE movies ADD COLUMN recommendations_json TEXT;   -- "More like this" cache
+
+ALTER TABLE series ADD COLUMN tagline              TEXT;
+ALTER TABLE series ADD COLUMN vote_count           INTEGER;
+ALTER TABLE series ADD COLUMN popularity           REAL;
+ALTER TABLE series ADD COLUMN recommendations_json TEXT;
+
+ALTER TABLE episodes ADD COLUMN air_date   TEXT;
+ALTER TABLE episodes ADD COLUMN rating     REAL;
+ALTER TABLE episodes ADD COLUMN vote_count INTEGER;
+
+CREATE INDEX IF NOT EXISTS idx_movies_popularity ON movies (popularity DESC);
+CREATE INDEX IF NOT EXISTS idx_series_popularity ON series (popularity DESC);
+
+-- ── Trakt (the token column already exists; these complete the integration) ─
+ALTER TABLE users ADD COLUMN trakt_refresh_token TEXT;
+ALTER TABLE users ADD COLUMN trakt_username      TEXT;
+ALTER TABLE users ADD COLUMN trakt_last_sync_at  INTEGER;
+
+-- ── activity feed (community tab) ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS activities (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,        -- watched | rated | favourited | added_to_list | started_following
+    media_type TEXT,
+    media_id   INTEGER,
+    payload    TEXT,                 -- JSON: rating value, list name, etc.
+    is_public  INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_activities_user ON activities (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activities_feed ON activities (created_at DESC, is_public);
+
+-- ── search: recent searches per user (global search_cache stays as it is) ──
+CREATE TABLE IF NOT EXISTS user_recent_searches (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    query      TEXT NOT NULL,
+    searched_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (user_id, query)
+);
+
+-- ── "new episode" notifications need an explicit series follow ─────────────
+CREATE TABLE IF NOT EXISTS user_series_follow (
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    series_id     INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+    notify        INTEGER NOT NULL DEFAULT 1,
+    last_seen_season  INTEGER,
+    last_seen_episode INTEGER,
+    created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (user_id, series_id)
+);
+
+-- ============================================================================
+-- Verification after both parts (paste this separately):
+--   SELECT name FROM pragma_table_info('users');
+--   SELECT name FROM pragma_table_info('movies');
+--   SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+--     AND name NOT LIKE 'sqlite_%' ORDER BY name;
+-- Expect: users gains 8 columns, movies gains 21, and 16 + 9 = 25 tables.
+-- Row counts must be unchanged: movies 328, series 108, episodes 2732,
+--   movie_links 1688, episode_links 608, download_files 1705.
+-- ============================================================================
