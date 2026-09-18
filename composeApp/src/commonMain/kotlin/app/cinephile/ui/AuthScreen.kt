@@ -86,7 +86,7 @@ fun AuthScreen() {
     ) {
         BeamLogo()
         Spacer(Modifier.height(12.dp))
-        Text("beamPlay", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = BeamColors.textPrimary)
+        Text("Cinephile", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = BeamColors.textPrimary)
         Spacer(Modifier.height(6.dp))
         Text(
             "Movies & series, your way",

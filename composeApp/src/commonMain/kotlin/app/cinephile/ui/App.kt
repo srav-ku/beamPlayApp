@@ -94,7 +94,7 @@ private fun Splash(onDone: () -> Unit) {
             }
             Spacer(Modifier.height(14.dp))
             Text(
-                "beamPlay",
+                "Cinephile",
                 fontSize = 28.sp,
                 fontFamily = GeistMono,
                 fontWeight = FontWeight.Black,

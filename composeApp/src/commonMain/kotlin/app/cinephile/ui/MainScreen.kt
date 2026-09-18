@@ -561,7 +561,7 @@ private fun BeamTopBar(onSearch: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "BEAM",
+                text = "CINEPHILE",
                 color = colors.foreground,
                 fontFamily = Inter,
                 fontSize = 24.sp,
