@@ -735,7 +735,7 @@ private fun CatalogTab(kind: String, onOpenMedia: (MediaItem) -> Unit) {
     }
 
     // Debounced reload whenever a filter changes (matches the website).
-    LaunchedEffect(genre, year, language, retry) {
+    LaunchedEffect(kind, genre, year, language, retry) {
         if (retry > 0 || genre.isNotBlank() || year.isNotBlank() || language.isNotBlank()) {
             kotlinx.coroutines.delay(300)
         }
@@ -908,11 +908,15 @@ private fun CatalogTab(kind: String, onOpenMedia: (MediaItem) -> Unit) {
 @Composable
 private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
     var kind by remember { mutableStateOf("movies") }
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             listOf("movies" to "Movies", "series" to "TV Shows").forEach { pair ->

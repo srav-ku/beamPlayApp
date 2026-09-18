@@ -89,15 +89,7 @@ fun BeamBottomNav(
                     label = "beam-nav-highlight",
                 )
 
-                Box(
-                    Modifier
-                        .offset(x = highlightX)
-                        .width(itemWidth)
-                        .fillMaxHeight()
-                        .padding(horizontal = 9.dp, vertical = 9.dp)
-                        .clip(RoundedCornerShape(21.dp))
-                        .background(Color(0x1AFFFFFF)),
-                )
+
             }
 
             Row(
