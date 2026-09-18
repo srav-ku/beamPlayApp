@@ -83,55 +83,57 @@ fun App(sessionStore: app.cinephile.data.SessionStore) {
 
 @Composable
 private fun Splash(onDone: () -> Unit) {
-    // Five beats, ~2.2s. One signature gesture (the amber sweep), no infinite loops,
-    // nothing that repeats - which is what keeps it premium instead of busy.
+    // Design rule taken from Netflix / Apple TV+ / Disney+ and Material's launch-screen guidance:
+    // stillness reads premium, travel reads gimmick. So: long slow fades, a held mark, a glow
+    // that blooms instead of moves, and an exit that fades rather than cuts. No sweep, no loop.
     var stage by remember { mutableStateOf(0) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(140); stage = 1  // stars breathe in
-        kotlinx.coroutines.delay(220); stage = 2  // "Cine" arrives
-        kotlinx.coroutines.delay(520); stage = 3  // "phile" follows
-        kotlinx.coroutines.delay(140); stage = 4  // rule draws + light sweeps
-        kotlinx.coroutines.delay(560); stage = 5  // settles
-        kotlinx.coroutines.delay(700)
+        kotlinx.coroutines.delay(120); stage = 1   // field warms up
+        kotlinx.coroutines.delay(400); stage = 2   // mark fades in + settles its tracking
+        kotlinx.coroutines.delay(900); stage = 3   // the amber rule draws under it
+        kotlinx.coroutines.delay(1400)             // stillness - the mark is simply held
+        stage = 4                                  // fade out, no cut
+        kotlinx.coroutines.delay(440)
         onDone()
     }
 
     val starsIn by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (stage >= 1) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(750), label = "sp-stars",
+        animationSpec = androidx.compose.animation.core.tween<Float>(1200), label = "sp-stars",
     )
-    val cineIn by androidx.compose.animation.core.animateFloatAsState(
+    val markIn by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (stage >= 2) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(620), label = "sp-cine",
+        animationSpec = androidx.compose.animation.core.tween<Float>(1100), label = "sp-mark",
     )
-    val phileIn by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (stage >= 3) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(620), label = "sp-phile",
+    val glowIn by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (stage >= 2) 0.14f else 0f,
+        animationSpec = androidx.compose.animation.core.tween<Float>(1500), label = "sp-glow",
     )
-    val rise by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (stage >= 2) 0f else 26f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(700), label = "sp-rise",
+    // Letter spacing tightening is the whole trick: type that settles feels typeset, not animated.
+    val tracking by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (stage >= 2) -0.5f else 7f,
+        animationSpec = androidx.compose.animation.core.tween<Float>(1500), label = "sp-track",
+    )
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (stage >= 2) 1f else 0.965f,
+        animationSpec = androidx.compose.animation.core.tween<Float>(1500), label = "sp-scale",
     )
     val ruleW by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (stage >= 4) 132.dp else 0.dp,
-        animationSpec = androidx.compose.animation.core.tween<androidx.compose.ui.unit.Dp>(650), label = "sp-rule",
+        targetValue = if (stage >= 3) 128.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween<androidx.compose.ui.unit.Dp>(850), label = "sp-rule",
     )
-    val sweep by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (stage >= 4) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(950), label = "sp-sweep",
-    )
-    val settle by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (stage >= 5) 1f else 0.97f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(650), label = "sp-settle",
+    val rootOut by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (stage >= 4) 0f else 1f,
+        animationSpec = androidx.compose.animation.core.tween<Float>(440), label = "sp-out",
     )
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF0E0E0D)),
+            .background(Color(0xFF0E0E0D))
+            .alpha(rootOut),
         contentAlignment = Alignment.Center,
     ) {
-        // Stars arrive first: the room lights up before the brand does.
         BoxWithConstraints(Modifier.fillMaxSize().alpha(starsIn)) {
             val w = maxWidth
             val h = maxHeight
@@ -139,41 +141,37 @@ private fun Splash(onDone: () -> Unit) {
                 Box(
                     Modifier
                         .offset(x = w * s[0], y = h * s[1])
-                        .size((1f + s[2] * 1.7f).dp)
-                        .alpha(0.22f + s[2] * 0.5f)
+                        .size((1f + s[2] * 1.6f).dp)
+                        .alpha(0.20f + s[2] * 0.45f)
                         .background(Color.White, CircleShape),
                 )
             }
         }
 
-        // The light sweep: one translucent amber bar travelling across the wordmark.
         Box(
             Modifier
-                .size(width = 96.dp, height = 64.dp)
-                .offset(x = (-170f + sweep * 340f).dp)
-                .alpha((1f - sweep) * 0.55f)
+                .size(360.dp)
+                .alpha(glowIn)
                 .background(
-                    Brush.horizontalGradient(
-                        listOf(Color.Transparent, Color(0x66E8A13A), Color.Transparent),
+                    Brush.radialGradient(
+                        listOf(Color(0xE8E8A13A), Color(0x00E8A13A)),
                     ),
+                    CircleShape,
                 ),
         )
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .offset(y = rise.dp)
-                .graphicsLayer { scaleX = settle; scaleY = settle },
+            modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
         ) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.alpha(markIn)) {
                 Text(
                     "Cine",
                     color = Color(0xFFF5F4F1),
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 38.sp,
-                    letterSpacing = (-1).sp,
-                    modifier = Modifier.alpha(cineIn),
+                    fontSize = 40.sp,
+                    letterSpacing = tracking.sp,
                 )
                 Text(
                     "phile",
@@ -181,26 +179,17 @@ private fun Splash(onDone: () -> Unit) {
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                     fontWeight = FontWeight.SemiBold,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    fontSize = 38.sp,
-                    letterSpacing = (-1).sp,
-                    modifier = Modifier.alpha(phileIn),
+                    fontSize = 40.sp,
+                    letterSpacing = tracking.sp,
                 )
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(18.dp))
             Box(
                 Modifier
                     .width(ruleW)
                     .height(2.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(Color(0xFFE8A13A)),
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "Discover, Access, Track.",
-                color = Color(0xFF8E8A82),
-                fontSize = 11.5.sp,
-                letterSpacing = 0.8.sp,
-                modifier = Modifier.alpha(starsIn),
             )
         }
     }
