@@ -38,12 +38,14 @@ val Overlay75 = Color(0xBF000000) // rgba(0,0,0,0.75)
 val Overlay40 = Color(0x66000000) // rgba(0,0,0,0.40)
 
 val BeamColorScheme = darkColorScheme(
-    primary = BeamForeground,
-    onPrimary = BeamBackground,
-    secondary = BeamCard,
+    // Amber is the brand. This was mapped to near-white (Cinephile's own --primary),
+    // which is why every primary control rendered white instead of the accent.
+    primary = BeamAmber500,
+    onPrimary = Color(0xFF161310),
+    secondary = BeamMuted,
     onSecondary = BeamForeground,
     tertiary = BeamAmber400,
-    onTertiary = Color.Black,
+    onTertiary = Color(0xFF161310),
     background = BeamBackground,
     onBackground = BeamForeground,
     surface = BeamCard,
