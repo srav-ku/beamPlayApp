@@ -28,19 +28,19 @@ object BeamColors {
     val bg = BeamBackground
     val surface = BeamCard
     val card = BeamCard
-    val cardElevated = Color(0xFF201E1B)   // warm raised surface
+    val cardElevated = Color(0xFF222226)
     val muted = BeamMuted
     val border = BeamBorder
     val borderLight = BeamBorderLight
 
-    val primary = Color(0xFFE8A13A)        // Cinephile amber; was near-white
-    val onPrimary = Color(0xFF161310)
+    val primary = BeamForeground
+    val onPrimary = BeamBackground
 
     val textPrimary = BeamForeground
     val textSecondary = BeamMutedForeground
-    val textMuted = Color(0xFF8A8378)
+    val textMuted = Color(0xFF71717A)
 
-    val amber = Color(0xFFE8A13A)
+    val amber = BeamAmber300
     val green = BeamGreen
 }
 
