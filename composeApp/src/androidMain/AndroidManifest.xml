@@ -5,7 +5,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="BeamPlay"
+        android:label="Cinephile"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:supportsPictureInPicture="true"

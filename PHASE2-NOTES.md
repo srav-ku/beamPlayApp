@@ -11,18 +11,18 @@ composeApp/src/commonMain/composeResources/font/
   geist_mono_regular.ttf  geist_mono_medium.ttf  geist_mono_semibold.ttf
   inter_semibold.ttf      inter_bold.ttf         inter_extrabold.ttf
 
-composeApp/src/commonMain/kotlin/dev/beam/beamplay/core/ui/theme/
+composeApp/src/commonMain/kotlin/app/cinephile/core/ui/theme/
   Colors.kt    exact html.dark palette + Material3 darkColorScheme
   Shapes.kt    8 / 12 / 16 / 20 / 26 dp + PillShape
   Type.kt      GeistMono + Inter FontFamily + BeamTypography
   Theme.kt     BeamTheme(), LocalBeamColors, `Beam.colors`
 
-composeApp/src/commonMain/kotlin/dev/beam/beamplay/core/ui/components/
+composeApp/src/commonMain/kotlin/app/cinephile/core/ui/components/
   CategoryPill.kt      rounded filter chip (LinkSelector.tsx)
   SectionHeader.kt     title + Movie/TV tabs + scroll chevrons (Home.tsx)
   LoadingSkeleton.kt   shimmer + PosterSkeleton + LineSkeleton
 
-composeApp/src/commonMain/kotlin/dev/beam/beamplay/core/util/
+composeApp/src/commonMain/kotlin/app/cinephile/core/util/
   TimeFormat.kt        formatRuntime / formatSeconds / formatProgress
   ImageUrl.kt          now also has tmdbImageUrlSized()
 ```

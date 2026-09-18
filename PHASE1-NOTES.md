@@ -6,7 +6,7 @@ starts to *look* like the website.
 ## What was added (all new files)
 
 ```
-composeApp/src/commonMain/kotlin/dev/beam/beamplay/core/
+composeApp/src/commonMain/kotlin/app/cinephile/core/
   network/HttpClientFactory.kt          Ktor client factory (expect), JSON config, BeamTokenStore, auth plugin
   network/BeamApi.kt                    every beamplay.beam-api.workers.dev endpoint
   network/TmdbApi.kt                    direct TMDB v3 calls (Home screen data)
@@ -17,10 +17,10 @@ composeApp/src/commonMain/kotlin/dev/beam/beamplay/core/
   model/TmdbModels.kt                   TMDB models
   util/ImageUrl.kt                      TMDB CDN URL builder
 
-composeApp/src/androidMain/kotlin/dev/beam/beamplay/core/network/
+composeApp/src/androidMain/kotlin/app/cinephile/core/network/
   HttpClientFactory.android.kt          OkHttp engine + cookie jar + timeouts + logging
 
-composeApp/src/androidUnitTest/kotlin/dev/beam/beamplay/core/
+composeApp/src/androidUnitTest/kotlin/app/cinephile/core/
   network/HttpClientFactoryTest.kt      auth header + live worker health
   network/BeamApiTest.kt                live worker endpoints
   network/TmdbApiTest.kt                live TMDB endpoints

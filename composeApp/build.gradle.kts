@@ -59,11 +59,11 @@ kotlin {
 }
 
 android {
-    namespace = "dev.beam.beamplay"
+    namespace = "app.cinephile"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.beam.beamplay"
+        applicationId = "app.cinephile"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
