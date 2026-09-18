@@ -7,7 +7,7 @@ $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $adb  = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
 $apk  = Join-Path $root "composeApp\build\outputs\apk\debug\composeApp-debug.apk"
-$pkg  = "dev.beam.beamplay"
+$pkg  = "app.cinephile"
 $wmemo = Join-Path $root ".beam-wireless"
 
 if (-not (Test-Path $adb)) { Write-Host "adb not found at: $adb" -ForegroundColor Red; exit 1 }
@@ -47,7 +47,7 @@ function Save-Target($addr) { Set-Content -Path $wmemo -Value $addr -Encoding as
 Reset-Adb
 
 Write-Host ""
-Write-Host "=== BeamPlay installer ===" -ForegroundColor Cyan
+Write-Host "=== Cinephile installer ===" -ForegroundColor Cyan
 
 # ---- 1. already reachable (USB or a remembered Wi-Fi target)? ----
 $serial = $null
@@ -125,7 +125,7 @@ if (-not $SkipBuild) {
 if (-not (Test-Path $apk)) { Write-Host "APK not found: $apk" -ForegroundColor Red; exit 1 }
 
 if (Install-Apk $serial) {
-    Write-Host "Installed. Launching BeamPlay..." -ForegroundColor Green
+    Write-Host "Installed. Launching Cinephile..." -ForegroundColor Green
     & $adb -s $serial shell monkey -p $pkg -c android.intent.category.LAUNCHER 1 | Out-Null
 } else {
     Write-Host "Install failed - re-run the script." -ForegroundColor Red
