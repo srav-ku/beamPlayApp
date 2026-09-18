@@ -40,7 +40,7 @@ object BeamColors {
     val textSecondary = BeamMutedForeground
     val textMuted = Color(0xFF8A8378)
 
-    val amber = BeamAmber500
+    val amber = Color(0xFFE8A13A)
     val green = BeamGreen
 }
 
