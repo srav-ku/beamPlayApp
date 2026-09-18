@@ -10,6 +10,7 @@ data class Session(
     val token: String? = null,
     val email: String? = null,
     val role: String? = null,
+    val displayName: String? = null,
 )
 
 interface SessionStore {
