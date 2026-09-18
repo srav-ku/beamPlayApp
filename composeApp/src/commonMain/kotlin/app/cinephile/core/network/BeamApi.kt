@@ -126,6 +126,13 @@ class BeamApi(private val client: HttpClient) {
 
     /* -------------------------------- Auth ------------------------------ */
 
+    /** Posts the Firebase ID token; the worker verifies it and derives the identity. */
+    suspend fun authGoogleToken(idToken: String, displayName: String): AuthResponse =
+        client.post("$base/auth/google") {
+            contentType(ContentType.Application.Json)
+            setBody(GoogleTokenBody(idToken = idToken, displayName = displayName))
+        }.body()
+
     suspend fun authGoogle(email: String, displayName: String, firebaseUid: String): AuthResponse =
         client.post("$base/auth/google") {
             contentType(ContentType.Application.Json)
@@ -236,4 +243,10 @@ private data class NextEpisodeBody(
     @SerialName("series_tmdb_id") val seriesTmdbId: Long,
     @SerialName("current_season_number") val season: Int,
     @SerialName("current_episode_number") val episode: Int,
+)
+
+/** Body for `POST /auth/google` after the token-verification change. */
+private data class GoogleTokenBody(
+    val idToken: String,
+    val displayName: String,
 )

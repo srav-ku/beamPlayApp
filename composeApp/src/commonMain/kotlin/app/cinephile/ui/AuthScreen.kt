@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.cinephile.data.Session
 import app.cinephile.data.SessionManager
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -114,6 +116,9 @@ fun AuthScreen() {
     var guest by remember { mutableStateOf(true) }
     var name by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<app.cinephile.data.GoogleUser?>(null) }
 
     val twinkle = rememberInfiniteTransition(label = "twinkle")
     val beat by twinkle.animateFloat(
@@ -160,17 +165,56 @@ fun AuthScreen() {
                                 step = "name"
                             },
                             onGoogle = {
-                                notice = "Google sign-in needs the Firebase client wired up - tell me and it is next. Guest works right now."
+                                if (busy) return@WelcomeCard
+                                busy = true
+                                notice = null
+                                scope.launch {
+                                    val g = app.cinephile.data.signInWithGoogle()
+                                    busy = false
+                                    if (g == null) {
+                                        notice = "Google sign-in was cancelled."
+                                    } else {
+                                        pending = g
+                                        guest = false
+                                        step = "name"
+                                    }
+                                }
                             },
                         )
                     } else {
                         NameCard(
                             name = name,
                             isGuest = guest,
+                            busy = busy,
                             onName = { name = it },
                             onBack = { step = "welcome" },
                             onContinue = {
-                                SessionManager.set(Session(method = "guest", displayName = name.trim()))
+                                val typed = name.trim()
+                                val g = pending
+                                if (g == null) {
+                                    SessionManager.set(Session(method = "guest", displayName = typed))
+                                } else {
+                                    busy = true
+                                    notice = null
+                                    scope.launch {
+                                        val api = app.cinephile.core.network.servicesOrNull?.beamApi
+                                        val res = runCatching { api?.authGoogleToken(g.idToken, typed) }.getOrNull()
+                                        busy = false
+                                        if (res == null) {
+                                            notice = "Could not finish sign-in. Try again in a moment."
+                                        } else {
+                                            SessionManager.set(
+                                                Session(
+                                                    method = "google",
+                                                    token = res.token,
+                                                    email = res.user?.email,
+                                                    role = res.user?.role,
+                                                    displayName = typed,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                }
                             },
                         )
                     }
@@ -272,6 +316,7 @@ private fun WelcomeCard(notice: String?, onGuest: () -> Unit, onGoogle: () -> Un
 private fun NameCard(
     name: String,
     isGuest: Boolean,
+    busy: Boolean,
     onName: (String) -> Unit,
     onBack: () -> Unit,
     onContinue: () -> Unit,
@@ -294,9 +339,11 @@ private fun NameCard(
 
         PillField(name, "Enter your name", onName)
         Spacer(Modifier.height(16.dp))
-        PrimaryButton("Continue", {
-            if (name.isNotBlank()) onContinue()
-        }, enabled = name.isNotBlank())
+        PrimaryButton(
+            if (busy) "Please wait\u2026" else "Continue",
+            { if (name.isNotBlank()) onContinue() },
+            enabled = name.isNotBlank() && !busy,
+        )
         Spacer(Modifier.height(10.dp))
         Text(
             "Back",
