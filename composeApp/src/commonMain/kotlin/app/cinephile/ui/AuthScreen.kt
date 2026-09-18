@@ -111,7 +111,7 @@ private val Stars: List<Star> = run {
 }
 
 @Composable
-fun AuthScreen() {
+fun AuthScreen(onAuthed: () -> Unit = {}) {
     var step by remember { mutableStateOf("welcome") } // welcome | name
     var guest by remember { mutableStateOf(true) }
     var name by remember { mutableStateOf("") }
@@ -192,7 +192,9 @@ fun AuthScreen() {
                                 val typed = name.trim()
                                 val g = pending
                                 if (g == null) {
+                                    println("[CinephileAuth] guest continue, name='$typed'")
                                     SessionManager.set(Session(method = "guest", displayName = typed))
+                                    onAuthed()
                                 } else {
                                     busy = true
                                     notice = null
@@ -203,6 +205,7 @@ fun AuthScreen() {
                                         if (res == null) {
                                             notice = "Could not finish sign-in. Try again in a moment."
                                         } else {
+                                            println("[CinephileAuth] google session created for '${res.user?.email}'")
                                             SessionManager.set(
                                                 Session(
                                                     method = "google",
@@ -212,6 +215,7 @@ fun AuthScreen() {
                                                     displayName = typed,
                                                 ),
                                             )
+                                            onAuthed()
                                         }
                                     }
                                 }

@@ -66,12 +66,14 @@ import app.cinephile.data.SessionManager
 fun App(sessionStore: app.cinephile.data.SessionStore) {
     app.cinephile.data.SessionManager.init(sessionStore)
     var appStarted by remember { mutableStateOf(false) }
+    var authed by remember { mutableStateOf(false) }
 
     BeamTheme {
         val session by app.cinephile.data.SessionManager.session.collectAsState()
+        println("[CinephileAuth] session=" + (session?.method ?: "none") + " authed=" + authed)
         when {
             !appStarted -> Splash { appStarted = true }
-            session == null -> AuthScreen()
+            session == null && !authed -> AuthScreen(onAuthed = { authed = true })
             else -> AppNavHost()
         }
     }
