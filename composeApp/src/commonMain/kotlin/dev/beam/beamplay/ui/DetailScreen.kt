@@ -101,6 +101,10 @@ fun BeamDetailScreen(
     var resolving by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
     var showPremium by remember { mutableStateOf(false) }
+    // True when the worker refused the links because of the premium gate - the UI must be
+    // able to say "locked", never show an empty list and let the user guess.
+    var premiumRequired by remember { mutableStateOf(false) }
+    val premiumLocked = premiumRequired || dev.beam.beamplay.data.EntitlementsState.streamLockedForThisUser
     var showDownloads by remember { mutableStateOf(false) }
 
     // Back closes an open sheet first - never the whole screen underneath it.
@@ -137,7 +141,13 @@ fun BeamDetailScreen(
 
     // Stream sources for this title (real data from the worker).
     LaunchedEffect(item.id) {
-        runCatching { servicesOrNull?.beamApi?.getMovieLinks(item.id) }.getOrNull()?.let { sources = it.items }
+        runCatching { servicesOrNull?.beamApi?.getMovieLinks(item.id) }
+            .onSuccess { result -> sources = result?.items ?: emptyList(); premiumRequired = false }
+            .onFailure {
+                val locked = dev.beam.beamplay.data.EntitlementsState.streamLockedForThisUser
+                premiumRequired = locked
+                if (!locked) sources = emptyList()
+            }
     }
 
     val title = item.title
@@ -250,7 +260,7 @@ fun BeamDetailScreen(
                             .clip(RoundedCornerShape(14.dp))
                             .background(colors.foreground)
                             .clickable {
-                    if (dev.beam.beamplay.data.EntitlementsState.streamLockedForThisUser) showPremium = true else showSources = true
+                    if (premiumLocked) { premiumRequired = true; showPremium = true } else showSources = true
                 },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
@@ -263,7 +273,7 @@ fun BeamDetailScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = if (resolving) "Loading\u2026" else "Play",
+                            text = if (resolving) "Loading\u2026" else if (premiumLocked) "Premium" else "Play",
                             color = colors.background,
                             fontFamily = GeistMono,
                             fontSize = 14.sp,
