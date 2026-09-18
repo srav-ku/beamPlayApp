@@ -90,6 +90,18 @@ import app.cinephile.data.MediaItem
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import app.cinephile.core.ui.theme.PillShape
+import kotlin.math.roundToInt
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -321,12 +333,17 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
 }
 
 @Composable
-private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}) {
+private fun HomeTab(
+    onOpenMedia: (MediaItem) -> Unit,
+    onOpenSearch: () -> Unit = {},
+    onResumeContinue: (ContinueItem) -> Unit = {},
+) {
     var railTick by remember { mutableStateOf(0) }
-    var trendingTab by remember { mutableStateOf("Movie") }
-    var latestTab by remember { mutableStateOf("Movie") }
-    var topRatedTab by remember { mutableStateOf("Movie") }
-    var popularTab by remember { mutableStateOf("Movie") }
+    var discovery by remember { mutableStateOf("Trending") }
+    var kind by remember { mutableStateOf("Movies") }
+    var pickTick by remember { mutableStateOf(0) }
+    // Session-scoped Watch Later: real behaviour, no backend needed yet.
+    var watchLater by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
     var trendingMovies by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var trendingSeries by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
@@ -336,10 +353,13 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
     var topRatedSeries by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var popularMovies by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var popularSeries by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var genreName by remember { mutableStateOf<String?>(null) }
+    var genreItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableStateOf(0) }
+    val resumeItems = remember(railTick) { localContinueWatching() }
 
     LaunchedEffect(retryTrigger) {
         loading = true
@@ -354,27 +374,27 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                 val trS = async { Api.getTmdbTopRatedSeries() }
                 val pM = async { Api.getTmdbPopularMovies() }
                 val pS = async { Api.getTmdbPopularSeries() }
+                val fOpts = async { runCatching { Api.getFilterOptions().genres }.getOrDefault(emptyList()) }
 
-                val tm = tM.await()
-                val ts = tS.await()
-                val npm = npM.await()
-                val ats = atS.await()
-                val trm = trM.await()
-                val trs = trS.await()
-                val pm = pM.await()
-                val ps = pS.await()
+                val tm = tM.await(); val ts = tS.await()
+                val npm = npM.await(); val ats = atS.await()
+                val trm = trM.await(); val trs = trS.await()
+                val pm = pM.await(); val ps = pS.await()
 
-                trendingMovies = tm
-                trendingSeries = ts
-                nowPlayingMovies = npm
-                airingTodaySeries = ats
-                topRatedMovies = trm
-                topRatedSeries = trs
-                popularMovies = pm
-                popularSeries = ps
+                trendingMovies = tm; trendingSeries = ts
+                nowPlayingMovies = npm; airingTodaySeries = ats
+                topRatedMovies = trm; topRatedSeries = trs
+                popularMovies = pm; popularSeries = ps
+
+                // "Because you like {Genre}" - first genre from the catalog filters.
+                val g = fOpts.await().firstOrNull()
+                if (g != null) {
+                    genreName = g
+                    genreItems = runCatching { Api.movies(genre = g, limit = 20).items }.getOrDefault(emptyList())
+                }
 
                 if (tm.isEmpty() && ts.isEmpty()) {
-                    errorMessage = "No TMDB data returned. Tap to retry."
+                    errorMessage = "No data returned. Tap to retry."
                 }
             }
         } catch (e: Exception) {
@@ -387,9 +407,10 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
 
     LazyColumn(
         Modifier.fillMaxSize().background(Beam.colors.background),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(40.dp),
     ) {
-        item { BeamTopBar(onSearch = onOpenSearch) }
+        item { CinephileTopBar(onSearch = onOpenSearch) }
 
         when {
             loading -> item { HomeLoadingSkeleton() }
@@ -406,27 +427,24 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                         fontSize = 12.sp,
                     )
                     Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = { retryTrigger++ },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                        shape = RoundedCornerShape(10.dp),
-                    ) {
-                        Text("Retry", fontFamily = GeistMono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
+                    PillButton("Retry", primary = true) { retryTrigger++ }
                 }
             }
 
             else -> {
-                val trendingItems = if (trendingTab == "Movie") trendingMovies else trendingSeries
-                val latestItems = if (latestTab == "Movie") nowPlayingMovies else airingTodaySeries
-                val topRatedItems = if (topRatedTab == "Movie") topRatedMovies else topRatedSeries
-                val popularItems = if (popularTab == "Movie") popularMovies else popularSeries
 
-                // Continue Watching - locally remembered streams, no network.
+                // ---- 1. Continue Watching (this app's "My Collections" slot) ----
                 item {
-                    val resumeItems = remember(railTick) { localContinueWatching() }
-                    if (resumeItems.isNotEmpty()) {
-                        HomeSection(title = "Continue Watching") {
+                    HomeSection(title = "Continue Watching") {
+                        if (resumeItems.isEmpty()) {
+                            EmptyStateCard(
+                                icon = "\u25B6",
+                                title = "Nothing in progress yet",
+                                body = "Start any title and it will show up here, exactly where you left it.",
+                                cta = "Find something to watch",
+                                onCta = onOpenSearch,
+                            )
+                        } else {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -447,34 +465,70 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                     }
                 }
 
-                // Trending â€” rank-numbered backdrop cards, Movie / TV Show tabs.
-                if (trendingItems.isNotEmpty()) {
-                    item {
-                        HomeSection(
-                            title = "Trending",
-                            tabs = listOf("Movie", "TV Show"),
-                            activeTab = trendingTab,
-                            onTabChange = { trendingTab = it },
+                // ---- 2. Discovery: one rail driven by the filter pills ----
+                val discoveryItems = when (discovery) {
+                    "Popular" -> if (kind == "Movies") popularMovies else popularSeries
+                    "Top Rated" -> if (kind == "Movies") topRatedMovies else topRatedSeries
+                    "Latest" -> if (kind == "Movies") nowPlayingMovies else airingTodaySeries
+                    else -> if (kind == "Movies") trendingMovies else trendingSeries
+                }
+                item {
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            LazyRow(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                item {
+                                    PillGroup(
+                                        options = listOf("Trending", "Popular", "Top Rated", "Latest"),
+                                        selected = discovery,
+                                        onSelect = { discovery = it },
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            PillGroup(
+                                options = listOf("Movies", "TV"),
+                                selected = kind,
+                                onSelect = { kind = it },
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        if (discoveryItems.isEmpty()) {
+                            Box(Modifier.padding(horizontal = 16.dp)) {
+                                EmptyStateCard(
+                                    icon = "\u2726",
+                                    title = "Nothing here yet",
+                                    body = "Try another filter, or search the catalog directly.",
+                                    cta = "Search",
+                                    onCta = onOpenSearch,
+                                )
+                            }
+                        } else {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 itemsIndexed(
-                                    items = trendingItems,
-                                    key = { idx, item -> "tr_${trendingTab}_${item.tmdb_id}_$idx" },
-                                ) { index, item ->
-                                    BeamTrendingCard(
-                                        title = item.title,
-                                        backdropPath = item.backdrop_path,
-                                        posterPath = item.poster_path,
-                                        rating = item.tmdb_rating,
-                                        year = item.year,
-                                        rank = index + 1,
+                                    items = discoveryItems,
+                                    key = { idx, item -> "disc_" + discovery + "_" + kind + "_" + item.tmdb_id + "_" + idx },
+                                ) { _, item ->
+                                    DiscoveryCard(
+                                        modifier = Modifier.fillParentMaxWidth(0.82f).widthIn(max = 360.dp),
+                                        item = item,
+                                        added = watchLater.any { it.tmdb_id == item.tmdb_id },
+                                        onToggleAdd = {
+                                            watchLater = if (watchLater.any { it.tmdb_id == item.tmdb_id }) {
+                                                watchLater.filterNot { it.tmdb_id == item.tmdb_id }
+                                            } else {
+                                                watchLater + item
+                                            }
+                                        },
                                         onClick = { onOpenMedia(item) },
-                                        modifier = Modifier
-                                            .fillParentMaxWidth(0.82f)
-                                            .widthIn(max = 360.dp),
                                     )
                                 }
                             }
@@ -482,56 +536,66 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
                     }
                 }
 
-                // Latest â€” Now Playing / Airing Today.
-                if (latestItems.isNotEmpty()) {
-                    item {
-                        HomeSection(
-                            title = "Latest",
-                            tabs = listOf("Movie", "TV Show"),
-                            activeTab = latestTab,
-                            onTabChange = { latestTab = it },
-                        ) {
-                            PosterRow(
-                                keyPrefix = "l_${latestTab}",
-                                items = latestItems,
-                                onOpenMedia = onOpenMedia,
-                            )
+                // ---- 3. Pick for Me ----
+                val pool = if (watchLater.isNotEmpty()) watchLater else (trendingMovies + trendingSeries)
+                val pick = if (pool.isEmpty()) null else pool[pickTick % pool.size]
+                item {
+                    Column(Modifier.fillMaxWidth()) {
+                        SectionTitleRow(
+                            title = "Pick for Me",
+                            subtitle = if (watchLater.isNotEmpty()) "from Watch Later" else "trending now",
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Box(Modifier.padding(horizontal = 16.dp)) {
+                            if (pick == null) {
+                                EmptyStateCard(
+                                    icon = "\u2726",
+                                    title = "Add titles to Watch Later",
+                                    body = "Tap the + on any card and we will pick one for you when you cannot decide what to watch.",
+                                    cta = "Search the catalog",
+                                    onCta = onOpenSearch,
+                                )
+                            } else {
+                                PickForMeCard(
+                                    item = pick,
+                                    source = if (watchLater.isNotEmpty()) "Watch Later" else "Trending",
+                                    onView = { onOpenMedia(pick) },
+                                    onShuffle = { pickTick++ },
+                                )
+                            }
                         }
                     }
                 }
 
-                // Top Rated.
-                if (topRatedItems.isNotEmpty()) {
+                // ---- 4. Because you like {Genre} ----
+                if (genreItems.isNotEmpty()) {
                     item {
                         HomeSection(
-                            title = "Top Rated",
-                            tabs = listOf("Movie", "TV Show"),
-                            activeTab = topRatedTab,
-                            onTabChange = { topRatedTab = it },
+                            title = genreName?.let { "Because you like " + it } ?: "Recommended for You",
                         ) {
-                            PosterRow(
-                                keyPrefix = "tr_${topRatedTab}",
-                                items = topRatedItems,
-                                onOpenMedia = onOpenMedia,
-                            )
-                        }
-                    }
-                }
-
-                // Popular.
-                if (popularItems.isNotEmpty()) {
-                    item {
-                        HomeSection(
-                            title = "Popular",
-                            tabs = listOf("Movie", "TV Show"),
-                            activeTab = popularTab,
-                            onTabChange = { popularTab = it },
-                        ) {
-                            PosterRow(
-                                keyPrefix = "pop_${popularTab}",
-                                items = popularItems,
-                                onOpenMedia = onOpenMedia,
-                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                itemsIndexed(
+                                    items = genreItems,
+                                    key = { idx, item -> "genre_" + (genreName ?: "rec") + "_" + item.tmdb_id + "_" + idx },
+                                ) { _, item ->
+                                    DiscoveryCard(
+                                        modifier = Modifier.fillParentMaxWidth(0.82f).widthIn(max = 360.dp),
+                                        item = item,
+                                        added = watchLater.any { it.tmdb_id == item.tmdb_id },
+                                        onToggleAdd = {
+                                            watchLater = if (watchLater.any { it.tmdb_id == item.tmdb_id }) {
+                                                watchLater.filterNot { it.tmdb_id == item.tmdb_id }
+                                            } else {
+                                                watchLater + item
+                                            }
+                                        },
+                                        onClick = { onOpenMedia(item) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -541,146 +605,496 @@ private fun HomeTab(onOpenMedia: (MediaItem) -> Unit, onOpenSearch: () -> Unit =
 }
 
 /**
- * Mobile navbar, matching the site's `t4tsa-nav` layout at phone width:
- * row 1 = the `BEAM` wordmark (Inter 800, 24sp, -0.04em tracking),
- * row 2 = the full-width "Search Movies" pill (`t4tsa-search-btn`:
- * 44dp tall, 16dp radius, `--card` fill, 1dp light border).
+ * Mobile navbar per the Cinephile spec: logo left, search + avatar as 40dp
+ * bordered circles on the right. Desktop nav pills are intentionally absent.
  */
 @Composable
-private fun BeamTopBar(onSearch: () -> Unit) {
+private fun CinephileTopBar(onSearch: () -> Unit) {
     val colors = Beam.colors
-
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                text = "CINEPHILE",
+                "Cine",
                 color = colors.foreground,
-                fontFamily = Inter,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.96).sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 22.sp,
+                letterSpacing = (-0.6).sp,
+                maxLines = 1,
+            )
+            Text(
+                "phile",
+                color = colors.amber500,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.SemiBold,
+                fontStyle = FontStyle.Italic,
+                fontSize = 22.sp,
+                letterSpacing = (-0.6).sp,
                 maxLines = 1,
             )
         }
+        Spacer(Modifier.weight(1f))
+        CircleIconButton(Icons.Filled.Search, "Search", onSearch)
+        Spacer(Modifier.width(10.dp))
+        CircleIconButton(Icons.Filled.Person, "Profile") {}
+    }
+}
 
-        Spacer(Modifier.height(12.dp))
+@Composable
+private fun CircleIconButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val colors = Beam.colors
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(colors.card)
+            .border(1.dp, colors.foreground.copy(alpha = 0.12f), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = colors.foreground.copy(alpha = 0.72f),
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.card)
-                .border(1.dp, Color(0xB3CACACA), RoundedCornerShape(16.dp))
-                .clickable(onClick = onSearch)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = null,
-                tint = colors.foreground,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = "Search Movies",
-                color = colors.mutedForeground,
-                fontFamily = GeistMono,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-0.325).sp,
-                maxLines = 1,
-            )
+/** Segmented pill switcher: `bg-ring` active, muted inactive, 2dp inset. */
+@Composable
+private fun PillGroup(options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    val colors = Beam.colors
+    Row(
+        Modifier
+            .clip(PillShape)
+            .background(colors.card)
+            .border(1.dp, colors.border, PillShape)
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        options.forEach { option ->
+            val active = option == selected
+            Box(
+                Modifier
+                    .height(28.dp)
+                    .clip(PillShape)
+                    .background(if (active) colors.amber500 else Color.Transparent)
+                    .clickable { onSelect(option) }
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    option,
+                    color = if (active) Color(0xFF161310) else colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
 
+@Composable
+private fun PillButton(label: String, primary: Boolean, onClick: () -> Unit) {
+    val colors = Beam.colors
+    Box(
+        Modifier
+            .clip(PillShape)
+            .background(if (primary) colors.amber500 else Color.Transparent)
+            .border(1.dp, if (primary) Color.Transparent else colors.border, PillShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (primary) Color(0xFF161310) else colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
 
-/** `.section` â€” 48dp bottom rhythm, 16dp side padding on phones. */
+/** Section header: serif title, optional chevron, optional muted subtitle. */
+@Composable
+private fun SectionTitleRow(title: String, subtitle: String? = null, onSeeAll: (() -> Unit)? = null) {
+    val colors = Beam.colors
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = if (onSeeAll != null) Modifier.clickable(onClick = onSeeAll) else Modifier,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                color = colors.foreground,
+                fontFamily = FontFamily.Serif,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-0.3).sp,
+                maxLines = 1,
+            )
+            if (onSeeAll != null) {
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = colors.mutedForeground,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        if (subtitle != null) {
+            Spacer(Modifier.width(10.dp))
+            Text(
+                subtitle,
+                color = colors.mutedForeground,
+                fontFamily = GeistMono,
+                fontSize = 11.sp,
+                maxLines = 1,
+            )
+        }
+        Spacer(Modifier.weight(1f))
+    }
+}
+
+/** One dashboard section: header + 16dp gap + content. Sections are 40dp apart. */
 @Composable
 private fun HomeSection(
     title: String,
-    tabs: List<String>? = null,
-    activeTab: String? = null,
-    onTabChange: ((String) -> Unit)? = null,
+    subtitle: String? = null,
+    onSeeAll: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = 48.dp),
-    ) {
-        SectionHeader(
-            title = title,
-            modifier = Modifier.padding(horizontal = 16.dp),
-            tabs = tabs,
-            activeTab = activeTab,
-            onTabChange = onTabChange,
-        )
+    Column(Modifier.fillMaxWidth()) {
+        SectionTitleRow(title = title, subtitle = subtitle, onSeeAll = onSeeAll)
         Spacer(Modifier.height(16.dp))
         content()
     }
 }
 
-/** A carousel of poster cards (`.carousel-track` â€” 12dp gaps, 24dp end pad). */
+private fun formatRating(value: Double): String {
+    val tenths = (value * 10).roundToInt()
+    return (tenths / 10).toString() + "." + (tenths % 10).toString()
+}
+
+/**
+ * The dashboard card: 26dp chrome, 8dp padding, 16:10 backdrop, bottom-up
+ * gradient, title + rating/year over the image, Watch Later chip top-right.
+ */
 @Composable
-private fun PosterRow(
-    keyPrefix: String,
-    items: List<MediaItem>,
-    onOpenMedia: (MediaItem) -> Unit,
+private fun DiscoveryCard(
+    modifier: Modifier = Modifier,
+    item: MediaItem,
+    added: Boolean,
+    onToggleAdd: () -> Unit,
+    onClick: () -> Unit,
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(start = 16.dp, end = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    val colors = Beam.colors
+    Box(
+        modifier
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.foreground.copy(alpha = 0.12f), RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
     ) {
-        itemsIndexed(
-            items = items,
-            key = { idx, item -> "${keyPrefix}_${item.tmdb_id}_$idx" },
-        ) { _, item ->
-            ContentCard(
-                title = item.title,
-                posterPath = item.poster_path,
-                rating = item.tmdb_rating,
-                year = item.year,
-                width = 128.dp,
-                onClick = { onOpenMedia(item) },
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.muted),
+        ) {
+            val art = item.backdrop_path ?: item.poster_path
+            if (art != null) {
+                AsyncImage(
+                    model = Api.backdropUrl(art, "w780"),
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0x0D000000), Color(0x40000000), Color(0xE0000000)),
+                        ),
+                    ),
             )
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(if (added) colors.amber500.copy(alpha = 0.30f) else Color(0x80000000))
+                    .border(
+                        1.dp,
+                        if (added) colors.amber500.copy(alpha = 0.60f) else Color(0x26FFFFFF),
+                        CircleShape,
+                    )
+                    .clickable(onClick = onToggleAdd),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (added) Icons.Filled.Check else Icons.Filled.Add,
+                    contentDescription = if (added) "Remove from Watch Later" else "Add to Watch Later",
+                    tint = if (added) colors.amber500 else Color(0xD9FFFFFF),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+            ) {
+                Text(
+                    item.title,
+                    color = Color.White,
+                    fontFamily = GeistMono,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 19.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    Modifier.padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    item.tmdb_rating?.let { rating ->
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = Color(0xFFF5C77E),
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            formatRating(rating),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "\u00B7",
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Text(
+                        item.year?.toString() ?: "\u2014",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontFamily = GeistMono,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
         }
     }
 }
 
-/** Loading state â€” the web renders one section of 8 dimmed poster blocks. */
+/** Pick for Me: image left, content right, badge + meta + 2-line overview + actions. */
 @Composable
-private fun HomeLoadingSkeleton() {
+private fun PickForMeCard(
+    item: MediaItem,
+    source: String,
+    onView: () -> Unit,
+    onShuffle: () -> Unit,
+) {
+    val colors = Beam.colors
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.foreground.copy(alpha = 0.12f), RoundedCornerShape(26.dp))
+            .clickable(onClick = onView)
+            .padding(12.dp),
+    ) {
+        Column {
+            Row {
+                val art = item.backdrop_path ?: item.poster_path
+                Box(
+                    Modifier
+                        .width(128.dp)
+                        .height(96.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(colors.muted),
+                ) {
+                    if (art != null) {
+                        AsyncImage(
+                            model = Api.backdropUrl(art, "w500"),
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(
+                        Modifier
+                            .clip(PillShape)
+                            .background(colors.amber500.copy(alpha = 0.05f))
+                            .border(1.dp, colors.amber500.copy(alpha = 0.20f), PillShape)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "\u2726 Tonight's pick",
+                            color = colors.amber500,
+                            fontFamily = GeistMono,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        item.title,
+                        color = colors.foreground,
+                        fontFamily = GeistMono,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 21.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(
+                        Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        item.year?.let {
+                            Text(
+                                it.toString(),
+                                color = colors.mutedForeground,
+                                fontFamily = GeistMono,
+                                fontSize = 13.sp,
+                            )
+                        }
+                        item.tmdb_rating?.let { rating ->
+                            Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 13.sp)
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = Color(0xFFF0B457),
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                formatRating(rating),
+                                color = colors.mutedForeground,
+                                fontFamily = GeistMono,
+                                fontSize = 13.sp,
+                            )
+                        }
+                        Text(
+                            "\u00B7 " + source,
+                            color = colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                        )
+                    }
+                    item.overview?.takeIf { it.isNotBlank() }?.let { text ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text,
+                            color = colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillButton("View Details", primary = true, onClick = onView)
+                PillButton("Shuffle", primary = false, onClick = onShuffle)
+            }
+        }
+    }
+}
+
+/** Empty card: amber icon, title, body, outline CTA. */
+@Composable
+private fun EmptyStateCard(
+    icon: String,
+    title: String,
+    body: String,
+    cta: String,
+    onCta: () -> Unit,
+) {
+    val colors = Beam.colors
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = 48.dp),
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.border, RoundedCornerShape(26.dp))
+            .padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            LoadingSkeleton(
-                modifier = Modifier.width(96.dp).height(16.dp),
-                shape = RoundedCornerShape(6.dp),
-            )
-        }
+        Text(icon, color = colors.amber500.copy(alpha = 0.40f), fontSize = 26.sp)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            title,
+            color = colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            body,
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(16.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            userScrollEnabled = false,
-        ) {
-            items(count = 8) {
-                PosterSkeleton(width = 128.dp, modifier = Modifier.alpha(0.5f))
-            }
+        PillButton(cta, primary = false, onClick = onCta)
+    }
+}
+
+/** Loading: four 192dp rounded blocks, matching the spec's skeleton rhythm. */
+@Composable
+private fun HomeLoadingSkeleton() {
+    Column(Modifier.fillMaxWidth()) {
+        repeat(4) {
+            LoadingSkeleton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(192.dp)
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(26.dp),
+            )
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
