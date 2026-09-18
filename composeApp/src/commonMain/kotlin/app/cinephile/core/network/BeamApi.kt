@@ -246,6 +246,7 @@ private data class NextEpisodeBody(
 )
 
 /** Body for `POST /auth/google` after the token-verification change. */
+@kotlinx.serialization.Serializable
 private data class GoogleTokenBody(
     val idToken: String,
     val displayName: String,
