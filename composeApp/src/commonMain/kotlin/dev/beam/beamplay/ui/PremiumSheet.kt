@@ -79,7 +79,7 @@ fun PremiumSheet(onDismiss: () -> Unit) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = 640.dp)
+                .heightIn(max = 700.dp)
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 .background(Color(0xFF141418))
                 .clickable(enabled = false) {}
