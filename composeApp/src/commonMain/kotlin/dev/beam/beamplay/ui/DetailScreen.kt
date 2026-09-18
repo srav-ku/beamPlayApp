@@ -266,14 +266,14 @@ fun BeamDetailScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.PlayArrow,
+                            imageVector = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
                             contentDescription = null,
                             tint = colors.background,
                             modifier = Modifier.size(20.dp),
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = if (resolving) "Loading\u2026" else if (premiumLocked) "Premium" else "Play",
+                            text = if (resolving) "Loading\u2026" else "Stream",
                             color = colors.background,
                             fontFamily = GeistMono,
                             fontSize = 14.sp,
