@@ -110,6 +110,13 @@ private fun AppNavHost() {
     var playback by remember { mutableStateOf<PlaybackRequest?>(null) }
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Premium state: fetched once per launch, cached, never blocking the UI.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        dev.beam.beamplay.core.network.servicesOrNull?.beamApi?.let {
+            dev.beam.beamplay.data.EntitlementsState.refresh(it)
+        }
+    }
     val request = playback
     val current = backStack.lastOrNull()
 

@@ -2,6 +2,7 @@ package dev.beam.beamplay.core.network
 
 import dev.beam.beamplay.core.model.AuthResponse
 import dev.beam.beamplay.core.model.DownloadOptions
+import dev.beam.beamplay.core.model.Entitlements
 import dev.beam.beamplay.core.model.Episode
 import dev.beam.beamplay.core.model.EpisodeList
 import dev.beam.beamplay.core.model.FilterOptions
@@ -114,6 +115,9 @@ class BeamApi(private val client: HttpClient) {
         client.get("$base/tmdb-search") { parameter("q", q) }.body()
 
     suspend fun getFilters(): FilterOptions = client.get("$base/filters").body()
+
+    /** What this user may do. Server-driven, so the paywall can be switched without an APK update. */
+    suspend fun getEntitlements(): Entitlements = client.get("$base/user/entitlements").body()
 
     /* ----------------------------- Downloads ---------------------------- */
 
