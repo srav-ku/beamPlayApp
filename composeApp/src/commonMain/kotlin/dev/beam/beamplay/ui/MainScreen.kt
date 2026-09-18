@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tv
@@ -92,6 +93,7 @@ import kotlinx.coroutines.launch
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
+    Browse("Browse", Icons.Filled.Explore),
     Movies("Movies", Icons.Filled.Movie),
     Series("Series", Icons.Filled.Tv),
     Search("Search", Icons.Filled.Search),
@@ -283,6 +285,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
             Box(Modifier.weight(1f)) {
                 when (tab) {
                     Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search }, onResumeContinue = onResumeContinue)
+                    Tab.Browse -> BrowseTab(handleCardClick)
                     Tab.Movies -> CatalogTab(kind = "movies", handleCardClick)
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
                     Tab.Search -> SearchTab(handleCardClick)
@@ -292,7 +295,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
             }
 
             // Bottom navigation - matches beamPlay-web `.bottom-nav`
-            val navTabs = remember { Tab.entries.filter { it != Tab.Search } }
+            val navTabs = remember { listOf(Tab.Home, Tab.Browse, Tab.Library, Tab.Profile) }
             BeamBottomNav(
                 items = navTabs.map { BeamNavItem(it.label, it.icon) },
                 selectedIndex = navTabs.indexOf(tab),
@@ -899,6 +902,38 @@ private fun CatalogTab(kind: String, onOpenMedia: (MediaItem) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
+    var kind by remember { mutableStateOf("movies") }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("movies" to "Movies", "series" to "TV Shows").forEach { pair ->
+                val on = kind == pair.first
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(if (on) Color(0xFFF5A623) else Color(0x1FFFFFFF))
+                        .clickable { kind = pair.first }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = pair.second,
+                        color = if (on) Color(0xFF101014) else Color(0xFFEDEDED),
+                        fontFamily = GeistMono,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
+        }
+        CatalogTab(kind = kind, onOpenMedia = onOpenMedia)
     }
 }
 
