@@ -100,6 +100,7 @@ fun BeamDetailScreen(
     var watched by remember { mutableStateOf(false) }
     var resolving by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
+    var showPremium by remember { mutableStateOf(false) }
     var showDownloads by remember { mutableStateOf(false) }
     var resolvingUrl by remember { mutableStateOf<String?>(null) }
     var downloadFiles by remember { mutableStateOf<List<dev.beam.beamplay.core.model.DownloadFile>>(emptyList()) }
@@ -241,7 +242,9 @@ fun BeamDetailScreen(
                             .height(48.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(colors.foreground)
-                            .clickable { showSources = true },
+                            .clickable {
+                    if (dev.beam.beamplay.data.EntitlementsState.streamLockedForThisUser) showPremium = true else showSources = true
+                },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
                     ) {
@@ -486,6 +489,10 @@ fun BeamDetailScreen(
                 },
                 onDismiss = { showSources = false },
             )
+        }
+
+        if (showPremium) {
+            PremiumSheet(onDismiss = { showPremium = false })
         }
 
         if (showDownloads) {
