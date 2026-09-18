@@ -102,6 +102,13 @@ fun BeamDetailScreen(
     var showSources by remember { mutableStateOf(false) }
     var showPremium by remember { mutableStateOf(false) }
     var showDownloads by remember { mutableStateOf(false) }
+
+    // Back closes an open sheet first - never the whole screen underneath it.
+    PlatformBackHandler(enabled = showSources || showDownloads || showPremium) {
+        showSources = false
+        showDownloads = false
+        showPremium = false
+    }
     var resolvingUrl by remember { mutableStateOf<String?>(null) }
     var downloadFiles by remember { mutableStateOf<List<dev.beam.beamplay.core.model.DownloadFile>>(emptyList()) }
     var downloadsLoading by remember { mutableStateOf(false) }

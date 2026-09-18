@@ -111,6 +111,12 @@ private fun AppNavHost() {
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
+    // Back button: close the player, then unwind the detail stack; only when there is
+    // nothing left to close does the press fall through to the platform and exit the app.
+    PlatformBackHandler(enabled = playback != null || backStack.isNotEmpty()) {
+        if (playback != null) playback = null else backStack = backStack.dropLast(1)
+    }
+
     // Premium state: fetched once per launch, cached, never blocking the UI.
     androidx.compose.runtime.LaunchedEffect(Unit) {
         dev.beam.beamplay.core.network.servicesOrNull?.beamApi?.let {
