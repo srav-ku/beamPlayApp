@@ -7,28 +7,28 @@ import androidx.compose.ui.graphics.Color
 /*  Exact values from beamPlay-web/src/app/globals.css -> html.dark    */
 /* ------------------------------------------------------------------ */
 
-val BeamBackground = Color(0xFF0A0A0A)
-val BeamForeground = Color(0xFFFCFCFC)
-val BeamCard = Color(0xFF1C1C1E)
-val BeamPopover = Color(0xFF1C1C1E)
-val BeamMuted = Color(0xFF2A2A2E)
-val BeamMutedForeground = Color(0xFFA1A1AA)
-val BeamBorder = Color(0xFF48484F)
-val BeamBorderLight = Color(0x14FFFFFF) // 8% white
-val BeamInput = Color(0xFF48484F)
+val BeamBackground = Color(0xFF0E0E0D)
+val BeamForeground = Color(0xFFF5F2EA)
+val BeamCard = Color(0xFF161513)
+val BeamPopover = Color(0xFF1A1815)
+val BeamMuted = Color(0xFF201E1B)
+val BeamMutedForeground = Color(0xFFB8AFA4)
+val BeamBorder = Color(0xFF2E2A26)
+val BeamBorderLight = Color(0x1AFFFFFF) // 8% white
+val BeamInput = Color(0xFF2E2A26)
 
-val BeamAmber300 = Color(0xFFFCD34D) // TMDB star
-val BeamAmber400 = Color(0xFFFBBF24) // accent hover
-val BeamAmber500 = Color(0xFFF59E0B) // active bookmark
-val BeamAmber600 = Color(0xFFD97706)
+val BeamAmber300 = Color(0xFFF5C77E) // TMDB star
+val BeamAmber400 = Color(0xFFF0B457) // accent hover
+val BeamAmber500 = Color(0xFFE8A13A) // active bookmark
+val BeamAmber600 = Color(0xFFC9871F)
 
-val BeamRed = Color(0xFFEF4444) // destructive / report
-val BeamGreen = Color(0xFF22C55E) // watched check
-val BeamBlue = Color(0xFF3B82F6) // info badges
+val BeamRed = Color(0xFFC4503A) // destructive / report
+val BeamGreen = Color(0xFF6B8E7F) // watched check
+val BeamBlue = Color(0xFF7D93A8) // info badges
 
 // Skeleton shimmer base + highlight
-val SkeletonBase = Color(0xFF1A1A1F)
-val SkeletonHighlight = Color(0xFF232328)
+val SkeletonBase = Color(0xFF161513)
+val SkeletonHighlight = Color(0xFF201E1B)
 
 // Translucent overlays matching the website's gradient stops
 val Overlay92 = Color(0xEB000000) // rgba(0,0,0,0.92)
@@ -59,3 +59,10 @@ val BeamColorScheme = darkColorScheme(
     outlineVariant = BeamBorderLight,
     scrim = Color.Black,
 )
+
+// --- Cinephile-style accent aliases (phonofilm.net tokens) ---
+val BeamAccent = Color(0xFFE8A13A)
+val BeamAccentPressed = Color(0xFFC9871F)
+val BeamAccentSoft = Color(0x1FE8A13A)
+val BeamSurfaceRaised = Color(0xFF1A1815)
+val BeamSurfaceSunken = Color(0xFF121110)
