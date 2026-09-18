@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:683803915198:android:fa079bb1e80be059b03fef",
+        "mobilesdk_app_id": "1:683803915198:android:760bdfbb5dc5814bb03fef",
         "android_client_info": {
-          "package_name": "dev.beam.beamplay"
+          "package_name": "app.cinephile"
         }
       },
       "oauth_client": [
