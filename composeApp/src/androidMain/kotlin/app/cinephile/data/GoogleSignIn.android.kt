@@ -6,6 +6,8 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -45,6 +47,21 @@ actual suspend fun signInWithGoogle(): GoogleUser? {
         GoogleIdTokenCredential.createFrom(credential.data)
     } catch (t: Throwable) {
         return null
+    }
+
+    // The google-services plugin did not run in this KMP module, so nothing generated the
+    // config resources FirebaseApp normally reads. Initialise explicitly instead - same
+    // values, no build-plugin dependency, and idempotent across calls.
+    if (FirebaseApp.getApps(ctx).isEmpty()) {
+        FirebaseApp.initializeApp(
+            ctx,
+            FirebaseOptions.Builder()
+                .setApplicationId("1:683803915198:android:760bdfbb5dc5814bb03fef")
+                .setProjectId("beam-20a1a")
+                .setGcmSenderId("683803915198")
+                .setApiKey("AIzaSyBcXX5gZHNwtIeeUuIFv4l41Zjbh0mHnng")
+                .build(),
+        )
     }
 
     val auth = FirebaseAuth.getInstance()
