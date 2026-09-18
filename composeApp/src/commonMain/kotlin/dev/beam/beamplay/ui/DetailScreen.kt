@@ -258,7 +258,7 @@ fun BeamDetailScreen(
                             .weight(1f)
                             .height(48.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(colors.foreground)
+                            .background(colors.amber500)
                             .clickable {
                     if (premiumLocked) { premiumRequired = true; showPremium = true } else showSources = true
                 },
@@ -268,7 +268,7 @@ fun BeamDetailScreen(
                         Icon(
                             imageVector = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
                             contentDescription = null,
-                            tint = colors.background,
+                            tint = Color(0xFF161310),
                             modifier = Modifier.size(20.dp),
                         )
                         Spacer(Modifier.width(8.dp))

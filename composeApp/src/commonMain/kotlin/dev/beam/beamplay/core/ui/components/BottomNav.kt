@@ -113,7 +113,7 @@ fun BeamBottomNav(
                         Icon(
                             imageVector = item.icon,
                             contentDescription = item.label,
-                            tint = if (active) Color(0xFFFCFCFC) else Color(0xFF7C7C86),
+                            tint = if (active) Color(0xFFE8A13A) else Color(0xFF8A8378),
                             modifier = Modifier.size(if (active) 25.dp else 22.dp),
                         )
                     }
