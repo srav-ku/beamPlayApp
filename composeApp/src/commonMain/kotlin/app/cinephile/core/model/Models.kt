@@ -228,6 +228,8 @@ data class AuthUser(
 data class AuthResponse(
     val token: String = "",
     val user: AuthUser? = null,
+    /** true when the account was just created - the app only asks for a display name then. */
+    val created: Boolean? = null,
 )
 
 /* ----------------------------- Cast ------------------------------- */

@@ -173,11 +173,45 @@ fun AuthScreen(onAuthed: () -> Unit = {}) {
                                     busy = false
                                     if (g == null) {
                                         notice = "Google sign-in was cancelled."
-                                    } else {
-                                        pending = g
-                                        guest = false
-                                        step = "name"
+                                        return@launch
                                     }
+                                    // Exchange straight away: the worker tells us whether this
+                                    // account already exists, so we only ask for a name when it
+                                    // is genuinely a new user.
+                                    val api = app.cinephile.core.network.servicesOrNull?.beamApi
+                                    if (api == null) {
+                                        println("[CinephileAuth] google: no api service available")
+                                        notice = "Network not ready. Try again in a moment."
+                                        return@launch
+                                    }
+                                    val first = runCatching {
+                                        api.authGoogleToken(g.idToken, g.displayName ?: g.email.substringBefore("@"))
+                                    }.onFailure { println("[CinephileAuth] google exchange failed: ${it::class.simpleName}: ${it.message}") }.getOrNull()
+
+                                    if (first == null) {
+                                        notice = "Could not reach the server. Check your connection and try again."
+                                        return@launch
+                                    }
+                                    if (first.created != true) {
+                                        println("[CinephileAuth] google: existing user, skipping name step")
+                                        val u = first.user
+                                        SessionManager.set(
+                                            Session(
+                                                method = "google",
+                                                token = first.token,
+                                                email = u?.email,
+                                                role = u?.role,
+                                                displayName = u?.display_name ?: g.displayName,
+                                            ),
+                                        )
+                                        onAuthed()
+                                        return@launch
+                                    }
+                                    // new account: ask for the display name, then save it
+                                    println("[CinephileAuth] google: new user, asking for a name")
+                                    pending = g
+                                    guest = false
+                                    step = "name"
                                 }
                             },
                         )
@@ -203,6 +237,7 @@ fun AuthScreen(onAuthed: () -> Unit = {}) {
                                         val res = runCatching { api?.authGoogleToken(g.idToken, typed) }.getOrNull()
                                         busy = false
                                         if (res == null) {
+                                            println("[CinephileAuth] google: name save failed")
                                             notice = "Could not finish sign-in. Try again in a moment."
                                         } else {
                                             println("[CinephileAuth] google session created for '${res.user?.email}'")
