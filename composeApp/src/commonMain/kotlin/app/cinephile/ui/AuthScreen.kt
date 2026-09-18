@@ -145,7 +145,6 @@ fun AuthScreen() {
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .windowInsetsPadding(WindowInsets.navigationBars),
         ) {
-            TopLogo()
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(
                     Modifier
@@ -177,7 +176,6 @@ fun AuthScreen() {
                     }
                 }
             }
-            Footer()
         }
     }
 }
@@ -185,44 +183,17 @@ fun AuthScreen() {
 /* ------------------------------------------------------------------ */
 
 @Composable
-private fun TopLogo() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
+private fun Wordmark(size: Int = 26, centred: Boolean = true) {
+    Row(
+        modifier = if (centred) Modifier.fillMaxWidth() else Modifier,
+        horizontalArrangement = if (centred) Arrangement.Center else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom,
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                "Cine",
-                color = Fg,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 23.sp,
-                letterSpacing = (-0.5).sp,
-            )
-            Text(
-                "phile",
-                color = Accent,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.SemiBold,
-                fontStyle = FontStyle.Italic,
-                fontSize = 23.sp,
-                letterSpacing = (-0.5).sp,
-            )
-        }
+        Text("Cine", color = Fg, fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold, fontSize = size.sp, letterSpacing = (-0.5).sp)
+        Text("phile", color = Accent, fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold, fontStyle = FontStyle.Italic, fontSize = size.sp, letterSpacing = (-0.5).sp)
     }
 }
 
-@Composable
-private fun Footer() {
-    Text(
-        text = "\u00A9 2026 Cinephile \u2014 Your personal movie & TV library.",
-        color = Muted,
-        fontSize = 12.sp,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 24.dp),
-    )
-}
 
 
 @Composable
@@ -240,7 +211,8 @@ private fun CardShellReal(content: @Composable () -> Unit) {
 @Composable
 private fun WelcomeCard(notice: String?, onGuest: () -> Unit, onGoogle: () -> Unit) {
     CardShellReal {
-        // headline block
+        Wordmark(size = 26)
+        Spacer(Modifier.height(18.dp))
         Text(
             "Your Go-To",
             color = Fg,

@@ -39,6 +39,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,30 +80,62 @@ fun App(sessionStore: app.cinephile.data.SessionStore) {
 @Composable
 private fun Splash(onDone: () -> Unit) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(650)
+        kotlinx.coroutines.delay(1700)
         onDone()
     }
+
+    // Entrance only - fade + rise, using the single animation API this file already uses.
+    var arrived by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { arrived = true }
+    val fade by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (arrived) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween<Float>(800),
+        label = "sp-fade",
+    )
+    val rise by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (arrived) 0f else 24f,
+        animationSpec = androidx.compose.animation.core.tween<Float>(800),
+        label = "sp-rise",
+    )
+
     Box(
-        Modifier.fillMaxSize().background(BeamColors.bg),
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0E0E0D)),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(68.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color.White),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("â–¶", fontSize = 34.sp, color = Color.Black)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .alpha(fade)
+                .offset(y = rise.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    "Cine",
+                    color = Color(0xFFF5F4F1),
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 34.sp,
+                    letterSpacing = (-0.6).sp,
+                )
+                Text(
+                    "phile",
+                    color = Color(0xFFE8A13A),
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontWeight = FontWeight.SemiBold,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    fontSize = 34.sp,
+                    letterSpacing = (-0.6).sp,
+                )
             }
             Spacer(Modifier.height(14.dp))
-            Text(
-                "Cinephile",
-                fontSize = 28.sp,
-                fontFamily = GeistMono,
-                fontWeight = FontWeight.Black,
-                color = Color.White,
+            Box(
+                Modifier
+                    .width(120.dp)
+                    .height(2.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFFE8A13A)),
             )
         }
     }
