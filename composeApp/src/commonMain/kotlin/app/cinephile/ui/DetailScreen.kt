@@ -69,6 +69,9 @@ import app.cinephile.core.ui.theme.GeistMono
 import app.cinephile.core.ui.theme.Inter
 import app.cinephile.data.Api
 import app.cinephile.data.MediaItem
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
+import kotlin.math.roundToInt
 
 /**
  * Title detail screen.
@@ -98,6 +101,8 @@ fun BeamDetailScreen(
     var watchLater by remember { mutableStateOf(false) }
     var favorite by remember { mutableStateOf(false) }
     var watched by remember { mutableStateOf(false) }
+    var myRating by remember { mutableStateOf(0) }
+    var moreLikeThis by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var resolving by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
     var showPremium by remember { mutableStateOf(false) }
@@ -150,6 +155,16 @@ fun BeamDetailScreen(
             }
     }
 
+    // More Like This: same first genre, straight from the catalog.
+    LaunchedEffect(item.id) {
+        val genre = item.genreList().firstOrNull()
+        if (!genre.isNullOrBlank()) {
+            moreLikeThis = runCatching {
+                Api.movies(genre = genre, limit = 12).items.filter { it.tmdb_id != item.tmdb_id }
+            }.getOrDefault(emptyList())
+        }
+    }
+
     val title = item.title
     val year = item.year
     val runtime = item.runtime
@@ -165,294 +180,145 @@ fun BeamDetailScreen(
         contentPadding = PaddingValues(bottom = 28.dp),
     ) {
         item {
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 11f)) {
-                val heroPath = item.backdrop_path ?: item.poster_path
-                Api.backdropUrl(heroPath, "w780")?.let { url ->
-                    AsyncImage(
-                        model = url,
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } ?: Box(Modifier.fillMaxSize().background(colors.card))
-
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.00f to Color(0x99000000),
-                                0.45f to Color(0x33000000),
-                                0.78f to Color(0xCC0A0A0A),
-                                1.00f to colors.background,
-                            ),
-                        ),
-                )
-
-                Box(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(14.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x8C000000))
-                        .border(1.dp, Color(0x1FFFFFFF), CircleShape)
-                        .clickable(onClick = onBack),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        }
-
-        item {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = title,
-                    color = colors.foreground,
-                    fontFamily = Inter,
-                    fontSize = 26.sp,
-                    lineHeight = 30.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.5).sp,
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PillText(if (isSeries) "Series" else "Movie")
-                    item.tmdb_rating?.takeIf { it > 0 }?.let { r ->
-                        RatingPill(r)
+            HeroCard(
+                item = item,
+                directors = directors.map { it.name },
+                premiumLocked = premiumLocked,
+                resolving = resolving,
+                watched = watched,
+                favorite = favorite,
+                watchLater = watchLater,
+                onBack = onBack,
+                onPlay = {
+                    if (premiumLocked) {
+                        premiumRequired = true
+                        showPremium = true
+                    } else {
+                        showSources = true
                     }
-                    year?.let { PillText(it.toString()) }
-                    runtime?.takeIf { it > 0 }?.let { PillText("${it}m") }
-                }
-
-                item.genreList().takeIf { it.isNotEmpty() }?.let { genres ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = genres.joinToString(", "),
-                        color = colors.mutedForeground,
-                        fontFamily = GeistMono,
-                        fontSize = 12.sp,
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(colors.amber500)
-                            .clickable {
-                    if (premiumLocked) { premiumRequired = true; showPremium = true } else showSources = true
                 },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            imageVector = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            tint = Color(0xFF161310),
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (resolving) "Loading\u2026" else "Stream",
-                            color = colors.background,
-                            fontFamily = GeistMono,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                onWatchLater = { watchLater = !watchLater },
+                onWatched = { watched = !watched },
+                onFavorite = { favorite = !favorite },
+                onDownload = {
+                    showDownloads = true
+                    if (downloadFiles.isEmpty() && !downloadsLoading) {
+                        downloadsLoading = true
+                        scope.launch {
+                            downloadFiles = if (isSeries) emptyList() else runCatching {
+                                app.cinephile.core.network.servicesOrNull?.beamApi
+                                    ?.getDownloadOptions("movie", item.id)
+                            }.getOrNull()?.items ?: emptyList()
+                            downloadsLoading = false
+                        }
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(colors.card)
-                            .border(1.dp, colors.border, RoundedCornerShape(14.dp))
-                            .clickable {
-                                showDownloads = true
-                                if (downloadFiles.isEmpty() && !downloadsLoading) {
-                                    downloadsLoading = true
-                                    scope.launch {
-                                        downloadFiles = if (isSeries) emptyList() else runCatching {
-                                            app.cinephile.core.network.servicesOrNull?.beamApi
-                                                ?.getDownloadOptions("movie", item.id)
-                                        }.getOrNull()?.items ?: emptyList()
-                                        downloadsLoading = false
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Download,
-                            contentDescription = "Download",
-                            tint = colors.foreground,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    ActionChip(
-                        label = "Mark Watched",
-                        icon = Icons.Filled.CheckCircle,
-                        active = watched,
-                        activeTint = colors.green,
-                    ) { watched = !watched }
-                    ActionChip(
-                        label = "Watch Later",
-                        icon = if (watchLater) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                        active = watchLater,
-                        activeTint = colors.amber500,
-                    ) { watchLater = !watchLater }
-                    ActionChip(
-                        label = "Favorite",
-                        icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        active = favorite,
-                        activeTint = colors.red,
-                    ) { favorite = !favorite }
-                    ActionChip(
-                        label = "Report",
-                        icon = Icons.Filled.Flag,
-                        active = false,
-                        activeTint = colors.red,
-                    ) { }
-                }
-            }
+                },
+            )
         }
 
+        // ---- Overview ----
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(22.dp))
-                DetailSection("Storyline") {
-                    Text(
-                        text = item.overview?.takeIf { it.isNotBlank() } ?: "No storyline provided yet.",
-                        color = colors.mutedForeground,
-                        fontFamily = GeistMono,
-                        fontSize = 13.sp,
-                        lineHeight = 21.sp,
-                    )
-                }
+                SectionLabel("Overview")
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = item.overview?.takeIf { it.isNotBlank() } ?: "No overview available.",
+                    color = colors.foreground,
+                    fontFamily = GeistMono,
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                )
             }
         }
 
-        if (directors.isNotEmpty()) {
+        // ---- Ratings grid: only the sources we actually have data for ----
+        val tmdbRating = item.tmdb_rating?.takeIf { it > 0 }
+        val imdbRating = item.imdb_rating?.takeIf { it > 0 }
+        if (tmdbRating != null || imdbRating != null) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    DetailSection("Director") {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            directors.forEach { d ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    AvatarCircle(d.profile_path, d.name, 44.dp)
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(
-                                        text = d.name,
-                                        color = colors.foreground,
-                                        fontFamily = GeistMono,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                            }
+                    Spacer(Modifier.height(24.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        tmdbRating?.let { value ->
+                            RatingCard("TMDB", fmt1(value), star = true, modifier = Modifier.weight(1f))
+                        }
+                        imdbRating?.let { value ->
+                            RatingCard("IMDb", fmt1(value), star = false, modifier = Modifier.weight(1f))
                         }
                     }
                 }
             }
         }
 
+        // ---- Cast: 3 columns, circular portraits, name + character ----
         if (cast.isNotEmpty()) {
             item {
-                DetailSection("Actors") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        items(cast) { person ->
-                            Column(
-                                modifier = Modifier.width(78.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                AvatarCircle(person.profile_path, person.name, 66.dp)
-                                Spacer(Modifier.height(7.dp))
-                                Text(
-                                    text = person.name,
-                                    color = colors.foreground,
-                                    fontFamily = GeistMono,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                person.character?.takeIf { it.isNotBlank() }?.let { role ->
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Spacer(Modifier.height(26.dp))
+                    SectionLabel("Cast")
+                    Spacer(Modifier.height(12.dp))
+                    cast.take(9).chunked(3).forEach { rowCast ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            rowCast.forEach { person ->
+                                Column(
+                                    Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    AvatarCircle(person.profile_path, person.name, 56.dp)
+                                    Spacer(Modifier.height(6.dp))
                                     Text(
-                                        text = role,
-                                        color = colors.mutedForeground,
+                                        text = person.name,
+                                        color = colors.foreground,
                                         fontFamily = GeistMono,
-                                        fontSize = 10.sp,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center,
                                     )
+                                    person.character?.takeIf { it.isNotBlank() }?.let { role ->
+                                        Text(
+                                            text = role,
+                                            color = colors.mutedForeground,
+                                            fontFamily = GeistMono,
+                                            fontSize = 10.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
                                 }
                             }
+                            repeat(3 - rowCast.size) { Spacer(Modifier.weight(1f)) }
                         }
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
             }
         }
 
-        if (studios.isNotEmpty()) {
-            item {
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    DetailSection("Studios") {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            studios.take(8).forEach { name -> PillText(name) }
-                        }
-                    }
-                }
-            }
-        }
-
+        // ---- Similar Movies ----
         if (similar.isNotEmpty()) {
             item {
-                DetailSection("More like this") {
+                Column(Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.height(10.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) { SectionLabel("Similar Movies") }
+                    Spacer(Modifier.height(12.dp))
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        itemsIndexed(similar.take(14)) { index, rec ->
-                            ContentCard(
+                        itemsIndexed(similar.take(14)) { _, rec ->
+                            RailCard(
                                 title = rec.displayTitle,
+                                backdropPath = rec.backdrop_path,
                                 posterPath = rec.poster_path,
                                 rating = rec.vote_average,
                                 year = rec.displayYear.take(4).toIntOrNull(),
-                                width = 124.dp,
                                 onClick = {
                                     onOpenMedia(
                                         MediaItem(
@@ -476,7 +342,49 @@ fun BeamDetailScreen(
             }
         }
 
-        item { Spacer(Modifier.navigationBarsPadding().height(8.dp)) }
+        // ---- More Like This: same genre, from the catalog ----
+        if (moreLikeThis.isNotEmpty()) {
+            item {
+                Column(Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.height(28.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) { SectionLabel("More Like This") }
+                    Spacer(Modifier.height(12.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        itemsIndexed(moreLikeThis) { _, rec ->
+                            RailCard(
+                                title = rec.title,
+                                backdropPath = rec.backdrop_path,
+                                posterPath = rec.poster_path,
+                                rating = rec.tmdb_rating,
+                                year = rec.year,
+                                modifier = Modifier.fillParentMaxWidth(0.82f),
+                                onClick = { onOpenMedia(rec) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Your Tracking ----
+        item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(28.dp))
+                TrackingCard(
+                    watched = watched,
+                    favorite = favorite,
+                    rating = myRating,
+                    onWatched = { watched = !watched },
+                    onFavorite = { favorite = !favorite },
+                    onRating = { myRating = it },
+                )
+            }
+        }
+
+        item { Spacer(Modifier.navigationBarsPadding().height(16.dp)) }
     }
         if (showSources) {
             SourcesSheet(
@@ -661,6 +569,551 @@ private fun ActionChip(
             fontFamily = GeistMono,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+private fun fmt1(value: Double): String {
+    val tenths = (value * 10).roundToInt()
+    return (tenths / 10).toString() + "." + (tenths % 10).toString()
+}
+
+/** Uppercase serif label used for every section heading on this screen. */
+@Composable
+private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        color = Beam.colors.mutedForeground,
+        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp,
+        modifier = modifier,
+    )
+}
+
+/** Thin pill used for genres, studios and metadata. */
+@Composable
+private fun MetaPill(text: String) {
+    val colors = Beam.colors
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(colors.muted)
+            .border(1.dp, colors.border, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            color = colors.foreground.copy(alpha = 0.85f),
+            fontFamily = GeistMono,
+            fontSize = 11.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Solid amber / outline pill button, the screen's only two button styles. */
+@Composable
+private fun DetailButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    primary: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = Beam.colors
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (primary) colors.amber500 else Color.Transparent)
+            .border(1.dp, if (primary) Color.Transparent else colors.border, RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (primary) Color(0xFF161310) else colors.foreground,
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text = label,
+            color = if (primary) Color(0xFF161310) else colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * The hero: backdrop with a gradient into the page colour, poster, serif title,
+ * meta row, genre pills, director credit and the action row.
+ */
+@Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+private fun HeroCard(
+    item: MediaItem,
+    directors: List<String>,
+    premiumLocked: Boolean,
+    resolving: Boolean,
+    watched: Boolean,
+    favorite: Boolean,
+    watchLater: Boolean,
+    onBack: () -> Unit,
+    onPlay: () -> Unit,
+    onWatchLater: () -> Unit,
+    onWatched: () -> Unit,
+    onFavorite: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    val colors = Beam.colors
+    val isSeries = item.type == "series"
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.border, RoundedCornerShape(26.dp)),
+    ) {
+        Column {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                val heroPath = item.backdrop_path ?: item.poster_path
+                Api.backdropUrl(heroPath, "w780")?.let { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } ?: Box(Modifier.fillMaxSize().background(colors.card))
+
+                // Gradient into the page colour so the hero melts into the screen.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.00f to Color(0x33000000),
+                                0.55f to Color(0xB30E0E0D),
+                                1.00f to colors.background,
+                            ),
+                        ),
+                )
+
+                Box(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(12.dp)
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000))
+                        .border(1.dp, Color(0x1FFFFFFF), CircleShape)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+
+                // Poster pinned bottom-left of the backdrop.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 14.dp, bottom = 0.dp)
+                        .width(92.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(colors.muted)
+                        .border(1.dp, colors.border, RoundedCornerShape(18.dp)),
+                ) {
+                    Api.backdropUrl(item.poster_path, "w342")?.let { url ->
+                        AsyncImage(
+                            model = url,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 16.dp)) {
+                Text(
+                    text = item.title,
+                    color = colors.foreground,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontSize = 24.sp,
+                    lineHeight = 29.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.4).sp,
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    item.tmdb_rating?.takeIf { it > 0 }?.let { rating ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = Color(0xFFF0B457),
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = fmt1(rating),
+                                color = Color(0xFFF0B457),
+                                fontFamily = GeistMono,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                        Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
+                    }
+                    item.year?.let {
+                        Text(
+                            text = it.toString(),
+                            color = colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 14.sp,
+                        )
+                        Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
+                    }
+                    Text(
+                        text = if (isSeries) {
+                            val seasons = item.total_seasons ?: 0
+                            if (seasons > 0) "$seasons season" + (if (seasons > 1) "s" else "") else "\u2014"
+                        } else {
+                            val runtime = item.runtime ?: 0
+                            if (runtime > 0) (runtime / 60).toString() + "h " + (runtime % 60).toString() + "m" else "\u2014"
+                        },
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 14.sp,
+                    )
+                    Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
+                    Text(
+                        text = if (isSeries) "TV" else "MOVIE",
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 12.sp,
+                        letterSpacing = 0.6.sp,
+                    )
+                }
+
+                val genres = item.genreList().take(4)
+                if (genres.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        genres.forEach { genre -> MetaPill(genre) }
+                    }
+                }
+
+                if (directors.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row {
+                        Text(
+                            text = "Directed by ",
+                            color = colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                        )
+                        Text(
+                            text = directors.joinToString(", "),
+                            color = colors.amber500,
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DetailButton(
+                        label = if (resolving) "Loading\u2026" else "Play",
+                        icon = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
+                        primary = true,
+                        onClick = onPlay,
+                    )
+                    DetailButton(
+                        label = "My List",
+                        icon = if (watchLater) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                        primary = false,
+                        onClick = onWatchLater,
+                    )
+                    DetailButton(
+                        label = "Download",
+                        icon = Icons.Filled.Download,
+                        primary = false,
+                        onClick = onDownload,
+                    )
+                    DetailButton(
+                        label = if (watched) "Watched" else "Mark watched",
+                        icon = if (watched) Icons.Filled.CheckCircle else Icons.Filled.CheckCircle,
+                        primary = false,
+                        onClick = onWatched,
+                    )
+                    DetailButton(
+                        label = if (favorite) "Favorite" else "Add to favorites",
+                        icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        primary = false,
+                        onClick = onFavorite,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One ratings-grid cell: muted label above a bold value. */
+@Composable
+private fun RatingCard(
+    label: String,
+    value: String,
+    star: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = Beam.colors
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.border, RoundedCornerShape(26.dp))
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = label,
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 12.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (star) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFF0B457),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Text(
+                text = value,
+                color = colors.foreground,
+                fontFamily = GeistMono,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** Carousel card: 26dp chrome, 16:10 backdrop, title + rating/year over the image. */
+@Composable
+private fun RailCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    backdropPath: String?,
+    posterPath: String?,
+    rating: Double?,
+    year: Int?,
+    onClick: () -> Unit,
+) {
+    val colors = Beam.colors
+    Box(
+        Modifier
+            .then(modifier)
+            .widthIn(max = 360.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.foreground.copy(alpha = 0.12f), RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.muted),
+        ) {
+            val art = backdropPath ?: posterPath
+            if (art != null) {
+                AsyncImage(
+                    model = Api.backdropUrl(art, "w780"),
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0x0D000000), Color(0x40000000), Color(0xE0000000)),
+                        ),
+                    ),
+            )
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontFamily = GeistMono,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 19.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    Modifier.padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    rating?.takeIf { it > 0 }?.let { value ->
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = Color(0xFFF5C77E),
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = fmt1(value),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text("\u00B7", color = Color.White.copy(alpha = 0.45f), fontFamily = GeistMono, fontSize = 13.sp)
+                    }
+                    Text(
+                        text = year?.toString() ?: "\u2014",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontFamily = GeistMono,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Watched / favorite toggles plus a 5-star personal rating. */
+@Composable
+private fun TrackingCard(
+    watched: Boolean,
+    favorite: Boolean,
+    rating: Int,
+    onWatched: () -> Unit,
+    onFavorite: () -> Unit,
+    onRating: (Int) -> Unit,
+) {
+    val colors = Beam.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.amber500.copy(alpha = 0.20f), RoundedCornerShape(26.dp))
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = colors.amber500,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = "Your Tracking",
+                color = colors.foreground,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DetailButton(
+                label = if (watched) "Watched" else "Mark watched",
+                icon = Icons.Filled.CheckCircle,
+                primary = false,
+                onClick = onWatched,
+            )
+            DetailButton(
+                label = if (favorite) "Favorite" else "Add to favorites",
+                icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                primary = false,
+                onClick = onFavorite,
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            text = "Your rating",
+            color = colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (1..5).forEach { star ->
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = "$star stars",
+                    tint = if (star <= rating) Color(0xFFF0B457) else colors.mutedForeground.copy(alpha = 0.40f),
+                    modifier = Modifier.size(22.dp).clickable { onRating(star) },
+                )
+            }
+            if (rating > 0) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "$rating/5",
+                    color = colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Ratings are kept on this device for now.",
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 11.sp,
         )
     }
 }
