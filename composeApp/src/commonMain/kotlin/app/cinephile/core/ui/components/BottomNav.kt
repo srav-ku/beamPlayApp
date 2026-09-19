@@ -1,37 +1,30 @@
 package app.cinephile.core.ui.components
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.cinephile.core.ui.theme.Beam
+import app.cinephile.core.ui.theme.GeistMono
 
 /** One entry in [BeamBottomNav]. */
 data class BeamNavItem(
@@ -40,12 +33,12 @@ data class BeamNavItem(
 )
 
 /**
- * Icon-first floating dock.
+ * Bottom navigation, per the Cinephile spec: a full-width edge-to-edge bar that
+ * sticks to the bottom of the screen - no side margins, no corner radius, no
+ * drop shadow. Separation comes from a single 1dp top border, which reads as
+ * permanent navigation rather than a floating panel.
  *
- * Deliberately has **no text labels**: the icon set is unambiguous (house /
- * film / tv / bookshelf), the active tab is communicated by a gliding pill
- * highlight plus a brighter, slightly larger icon, and every item still carries
- * a `contentDescription` for screen readers.
+ * 56dp tall, 20dp icons, 9sp labels, amber when active and warm grey otherwise.
  */
 @Composable
 fun BeamBottomNav(
@@ -54,69 +47,51 @@ fun BeamBottomNav(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pillShape = RoundedCornerShape(30.dp)
+    val colors = Beam.colors
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .background(colors.background.copy(alpha = 0.98f))
+            .navigationBarsPadding(),
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .shadow(
-                    elevation = 22.dp,
-                    shape = pillShape,
-                    clip = false,
-                    ambientColor = Color(0xCC000000),
-                    spotColor = Color(0xCC000000),
-                )
-                .clip(pillShape)
-                .background(Color(0xFF121216))
-                .border(1.dp, Color(0x14FFFFFF), pillShape),
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+
+        Row(
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            val itemWidth = maxWidth / items.size
+            items.forEachIndexed { index, item ->
+                val active = index == selectedIndex
+                val interactionSource = remember { MutableInteractionSource() }
+                val tint = if (active) colors.amber500 else colors.mutedForeground
 
-            if (selectedIndex in items.indices) {
-                val highlightX by animateDpAsState(
-                    targetValue = itemWidth * selectedIndex,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    label = "beam-nav-highlight",
-                )
-
-
-            }
-
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                items.forEachIndexed { index, item ->
-                    val active = index == selectedIndex
-                    val interactionSource = remember { MutableInteractionSource() }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(
-                                interactionSource = interactionSource,
-                                indication = null,
-                            ) { onSelect(index) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.label,
-                            tint = if (active) Color(0xFFE8A13A) else Color(0xFF8A8378),
-                            modifier = Modifier.size(if (active) 25.dp else 22.dp),
-                        )
-                    }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                        ) { onSelect(index) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        tint = tint,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = item.label,
+                        color = tint,
+                        fontFamily = GeistMono,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                    )
                 }
             }
         }

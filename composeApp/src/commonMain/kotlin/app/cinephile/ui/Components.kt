@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Check
 import app.cinephile.core.ui.theme.GeistMono
 import app.cinephile.data.Api
 import app.cinephile.data.MediaItem
+import app.cinephile.core.ui.theme.Beam
 
 /**
  * Filter Pill Row (e.g. [Movie | TV Show])
@@ -588,18 +589,27 @@ fun ContinueWatchingResumeCard(
         else -> "less than a minute left"
     }
 
+    val colors = Beam.colors
     val imageUrl = item.art?.takeIf { it.isNotBlank() }?.let { Api.backdropUrl(it, "w500") }
     var confirmRemove by remember { mutableStateOf(false) }
 
-
+    // Spec card chrome, same as the dashboard cards: 26dp outer, 8dp padding,
+    // 18dp inner, 16:10 backdrop, bottom-up gradient, 3dp accent progress bar.
     Box(
         modifier = modifier
-            .width(250.dp)
-            .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF17171C))
-            .clickable(onClick = onClick),
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.foreground.copy(alpha = 0.12f), RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
     ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.muted),
+        ) {
             if (!imageUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = imageUrl,
@@ -607,120 +617,115 @@ fun ContinueWatchingResumeCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(Color(0xFF1C1C22), Color(0xFF131318)))),
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0x0D000000), Color(0x40000000), Color(0xE0000000)),
+                        ),
+                    ),
+            )
+
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x66000000)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Resume",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
                 )
             }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.Transparent,
-                        0.45f to Color(0x33000000),
-                        1.0f to Color(0xEE000000),
-                    ),
-                ),
+
+            Row(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000))
+                        .clickable { onWatched() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Check, "Mark as watched", tint = Color.White, modifier = Modifier.size(15.dp))
+                }
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000))
+                        .clickable { confirmRemove = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Close, "Remove", tint = Color.White, modifier = Modifier.size(15.dp))
+                }
+            }
+
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+            ) {
+                Text(
+                    text = item.title,
+                    color = Color.White,
+                    fontFamily = GeistMono,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    lineHeight = 19.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = remainingLabel,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Color(0x33FFFFFF)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxHeight()
+                        .background(colors.amber500),
+                )
+            }
+        }
+    }
+
+    if (confirmRemove) {
+        AlertDialog(
+            onDismissRequest = { confirmRemove = false },
+            title = { Text("Remove from Continue Watching?") },
+            text = { Text("\"" + item.title + "\" will be removed from this row.") },
+            confirmButton = {
+                TextButton(onClick = { confirmRemove = false; onRemove() }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRemove = false }) { Text("Cancel") }
+            },
         )
-
-        Box(
-            Modifier
-                .align(Alignment.Center)
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(Color(0x99000000)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = "Resume",
-                tint = Color.White,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-
-        Column(
-            Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-        ) {
-            Text(
-                text = item.title,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(0.9f),
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = remainingLabel,
-                color = Color(0xFFB6B6C0),
-                fontFamily = GeistMono,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Row(
-            Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xCC000000))
-                    .clickable { onWatched() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.Check, "Mark as watched", tint = Color.White, modifier = Modifier.size(16.dp))
-            }
-            Box(
-                Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xCC000000))
-                    .clickable { confirmRemove = true },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.Close, "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
-            }
-        }
-
-        if (confirmRemove) {
-            AlertDialog(
-                onDismissRequest = { confirmRemove = false },
-                title = { Text("Remove from Continue Watching?") },
-                text = { Text("\"" + item.title + "\" will be removed from this row.") },
-                confirmButton = {
-                    TextButton(onClick = { confirmRemove = false; onRemove() }) { Text("Remove") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmRemove = false }) { Text("Cancel") }
-                },
-            )
-        }
-        Box(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(Color(0x33FFFFFF)),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth(fraction)
-                    .fillMaxHeight()
-                    .background(Color(0xFFF5A623)),
-            )
-        }
     }
 }

@@ -544,6 +544,7 @@ private fun HomeTab(
                         SectionTitleRow(
                             title = "Pick for Me",
                             subtitle = if (watchLater.isNotEmpty()) "from Watch Later" else "trending now",
+                            action = { PillButton("Shuffle", primary = false) { pickTick++ } },
                         )
                         Spacer(Modifier.height(12.dp))
                         Box(Modifier.padding(horizontal = 16.dp)) {
@@ -560,7 +561,13 @@ private fun HomeTab(
                                     item = pick,
                                     source = if (watchLater.isNotEmpty()) "Watch Later" else "Trending",
                                     onView = { onOpenMedia(pick) },
-                                    onShuffle = { pickTick++ },
+                                    onAdd = {
+                                        watchLater = if (watchLater.any { it.tmdb_id == pick.tmdb_id }) {
+                                            watchLater
+                                        } else {
+                                            watchLater + pick
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -728,7 +735,7 @@ private fun PillButton(label: String, primary: Boolean, onClick: () -> Unit) {
 
 /** Section header: serif title, optional chevron, optional muted subtitle. */
 @Composable
-private fun SectionTitleRow(title: String, subtitle: String? = null, onSeeAll: (() -> Unit)? = null) {
+private fun SectionTitleRow(title: String, subtitle: String? = null, onSeeAll: (() -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     val colors = Beam.colors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -768,6 +775,7 @@ private fun SectionTitleRow(title: String, subtitle: String? = null, onSeeAll: (
             )
         }
         Spacer(Modifier.weight(1f))
+        action?.invoke()
     }
 }
 
@@ -777,10 +785,11 @@ private fun HomeSection(
     title: String,
     subtitle: String? = null,
     onSeeAll: (() -> Unit)? = null,
+    action: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        SectionTitleRow(title = title, subtitle = subtitle, onSeeAll = onSeeAll)
+        SectionTitleRow(title = title, subtitle = subtitle, onSeeAll = onSeeAll, action = action)
         Spacer(Modifier.height(16.dp))
         content()
     }
@@ -919,7 +928,7 @@ private fun PickForMeCard(
     item: MediaItem,
     source: String,
     onView: () -> Unit,
-    onShuffle: () -> Unit,
+    onAdd: () -> Unit,
 ) {
     val colors = Beam.colors
     Box(
@@ -1033,7 +1042,7 @@ private fun PickForMeCard(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PillButton("View Details", primary = true, onClick = onView)
-                PillButton("Shuffle", primary = false, onClick = onShuffle)
+                PillButton("Add to List", primary = false, onClick = onAdd)
             }
         }
     }
