@@ -103,6 +103,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import app.cinephile.core.ui.theme.PillShape
 import kotlin.math.roundToInt
+import androidx.compose.material.icons.filled.Bookmark
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -295,7 +296,8 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
                 .fillMaxSize()
                 .background(BeamColors.bg),
         ) {
-            Box(Modifier.weight(1f)) {
+            // Bottom padding leaves room for the floating bar so content is never hidden.
+            Box(Modifier.weight(1f).padding(bottom = 78.dp)) {
                 when (tab) {
                     Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search }, onResumeContinue = onResumeContinue)
                     Tab.Browse -> BrowseTab(handleCardClick)
@@ -307,14 +309,25 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
                 }
             }
 
-            // Bottom navigation - matches beamPlay-web `.bottom-nav`
-            val navTabs = remember { listOf(Tab.Home, Tab.Browse, Tab.Library, Tab.Profile) }
-            BeamBottomNav(
-                items = navTabs.map { BeamNavItem(it.label, it.icon) },
-                selectedIndex = navTabs.indexOf(tab),
-                onSelect = { index -> tab = navTabs[index] },
+        }
+
+        // Floating glass bar: five destinations, hovering over the content.
+        val navItems = remember {
+            listOf(
+                BeamNavItem("Movies", Icons.Filled.Movie),
+                BeamNavItem("TV Series", Icons.Filled.Tv),
+                BeamNavItem("Discover", Icons.Filled.Explore),
+                BeamNavItem("Bookmarks", Icons.Filled.Bookmark),
+                BeamNavItem("Profile", Icons.Filled.Person),
             )
         }
+        val navTabs = remember { listOf(Tab.Movies, Tab.Series, Tab.Home, Tab.Library, Tab.Profile) }
+        BeamBottomNav(
+            items = navItems,
+            selectedIndex = navTabs.indexOf(tab).coerceAtLeast(0),
+            onSelect = { index -> tab = navTabs[index] },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
 
         // Checking indicator overlay
         if (isCheckingDb) {
