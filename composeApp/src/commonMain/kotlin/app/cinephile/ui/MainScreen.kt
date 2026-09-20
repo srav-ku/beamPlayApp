@@ -104,6 +104,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import app.cinephile.core.ui.theme.PillShape
 import kotlin.math.roundToInt
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.filled.BookmarkBorder
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -1335,36 +1342,497 @@ private fun CatalogTab(kind: String, onOpenMedia: (MediaItem) -> Unit) {
 @Composable
 private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
     var kind by remember { mutableStateOf("movies") }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-    ) {
+    var items by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var page by remember { mutableStateOf(1) }
+    var loading by remember { mutableStateOf(true) }
+    var loadingMore by remember { mutableStateOf(false) }
+    var endReached by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    var genre by remember { mutableStateOf("") }
+    var year by remember { mutableStateOf("") }
+    var language by remember { mutableStateOf("") }
+    var options by remember { mutableStateOf(FilterOptionsUi()) }
+    var showFilters by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var retry by remember { mutableStateOf(0) }
+
+    val colors = Beam.colors
+    val gridState = rememberLazyGridState()
+
+    // Chip values come from the database, never hardcoded.
+    LaunchedEffect(Unit) {
+        runCatching { Api.getFilterOptions() }.getOrNull()?.let { f ->
+            options = FilterOptionsUi(f.genres, f.years, f.languages)
+        }
+    }
+
+    suspend fun loadPage(target: Int, replace: Boolean) {
+        if (replace) loading = true else loadingMore = true
+        error = null
+        try {
+            val res = if (kind == "movies") {
+                Api.movies(page = target, limit = 30, genre = genre, year = year, language = language)
+            } else {
+                Api.seriesList(page = target, limit = 30, genre = genre, year = year, language = language)
+            }
+            val incoming = res.items
+            items = if (replace) {
+                incoming
+            } else {
+                items + incoming.filter { fresh -> items.none { it.id == fresh.id && it.type == fresh.type } }
+            }
+            page = target
+            endReached = incoming.size < 30
+        } catch (e: Exception) {
+            error = "Could not load content. Check your connection."
+        } finally {
+            loading = false
+            loadingMore = false
+        }
+    }
+
+    LaunchedEffect(kind, genre, year, language, retry) {
+        if (retry > 0) kotlinx.coroutines.delay(200)
+        loadPage(1, replace = true)
+    }
+
+    // Infinite scroll: pull the next page a few rows early.
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+            .collect { last ->
+                if (!endReached && !loading && !loadingMore && items.isNotEmpty() && last >= items.size - 6) {
+                    loadPage(page + 1, replace = false)
+                }
+            }
+    }
+
+    val activeCount = listOf(genre, year, language).count { it.isNotBlank() }
+
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        // ---- Row 1: page title + filter button ----
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            listOf("movies" to "Movies", "series" to "TV Shows").forEach { pair ->
-                val on = kind == pair.first
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(if (on) Color(0xFFF5A623) else Color(0x1FFFFFFF))
-                        .clickable { kind = pair.first }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        text = pair.second,
-                        color = if (on) Color(0xFF101014) else Color(0xFFEDEDED),
-                        fontFamily = GeistMono,
-                        fontSize = 13.sp,
-                    )
+            Text(
+                text = "Browse",
+                color = Color.White,
+                fontFamily = Fraunces,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.5).sp,
+            )
+            Spacer(Modifier.weight(1f))
+            Row(
+                Modifier
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.card)
+                    .border(1.dp, colors.border, RoundedCornerShape(50))
+                    .clickable { showFilters = true }
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.Filled.Tune, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Text("Filter", color = Color.White, fontFamily = GeistMono, fontSize = 13.sp)
+                if (activeCount > 0) {
+                    Box(
+                        Modifier.size(18.dp).clip(CircleShape).background(colors.amber500),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = activeCount.toString(),
+                            color = Color(0xFF101014),
+                            fontFamily = GeistMono,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
-        CatalogTab(kind = kind, onOpenMedia = onOpenMedia)
+
+        Spacer(Modifier.height(16.dp))
+
+        // ---- Row 2: Movies / TV Shows segmented control ----
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(
+                Modifier
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.card)
+                    .border(1.dp, colors.border, RoundedCornerShape(50))
+                    .padding(3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                listOf("movies" to "Movies", "series" to "TV Shows").forEach { pair ->
+                    val on = kind == pair.first
+                    Box(
+                        Modifier
+                            .height(34.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (on) colors.amber500 else Color.Transparent)
+                            .clickable { kind = pair.first }
+                            .padding(horizontal = 22.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = pair.second,
+                            color = if (on) Color(0xFF101014) else colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 14.sp,
+                            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        when {
+            loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = colors.amber500, strokeWidth = 2.dp)
+            }
+
+            error != null && items.isEmpty() -> Column(
+                Modifier.fillMaxWidth().padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = error ?: "",
+                    color = colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.amber500)
+                        .clickable { retry++ }
+                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                ) {
+                    Text("Retry", color = Color(0xFF101014), fontFamily = GeistMono, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            items.isEmpty() -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "Nothing here yet.",
+                    color = colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                )
+            }
+
+            else -> LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                state = gridState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                items(
+                    items = items,
+                    key = { it.id.toString() + "_" + (it.type ?: "") },
+                ) { item ->
+                    BrowsePosterCard(
+                        item = item,
+                        saved = saved.contains(item.id),
+                        onToggleSave = {
+                            saved = if (saved.contains(item.id)) saved - item.id else saved + item.id
+                        },
+                        onClick = { onOpenMedia(item) },
+                    )
+                }
+
+                if (loadingMore) {
+                    item(span = { GridItemSpan(3) }) {
+                        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = colors.amber500, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showFilters) {
+        BrowseFilterSheet(
+            genres = options.genres,
+            years = options.years,
+            languages = options.languages,
+            genre = genre,
+            year = year,
+            language = language,
+            onApply = { g, y, l ->
+                genre = g
+                year = y
+                language = l
+                showFilters = false
+            },
+            onReset = {
+                genre = ""
+                year = ""
+                language = ""
+            },
+            onDismiss = { showFilters = false },
+        )
+    }
+}
+
+/** Compact 3-column grid card: poster, bookmark chip, title, rating + year. */
+@Composable
+private fun BrowsePosterCard(
+    item: MediaItem,
+    saved: Boolean,
+    onToggleSave: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val colors = Beam.colors
+    Column(Modifier.clickable(onClick = onClick)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(6.dp))
+                .background(colors.card),
+        ) {
+            Api.backdropUrl(item.poster_path, "w342")?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(if (saved) colors.amber500.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.40f))
+                    .clickable(onClick = onToggleSave),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (saved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                    contentDescription = if (saved) "Remove bookmark" else "Bookmark",
+                    tint = if (saved) colors.amber500 else Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = item.title,
+            color = Color.White,
+            fontFamily = GeistMono,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            item.tmdb_rating?.takeIf { it > 0 }?.let { rating ->
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint = colors.amber500,
+                    modifier = Modifier.size(10.dp),
+                )
+                Text(formatRating(rating), color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 11.sp)
+                Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 11.sp)
+            }
+            Text(
+                text = item.year?.toString() ?: "\u2014",
+                color = colors.mutedForeground,
+                fontFamily = GeistMono,
+                fontSize = 11.sp,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** Label + wrapping chips for one filter group. */
+@Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+private fun FilterChipSection(
+    label: String,
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    val colors = Beam.colors
+    Text(
+        text = label,
+        color = colors.mutedForeground,
+        fontFamily = GeistMono,
+        fontSize = 12.sp,
+        letterSpacing = 1.sp,
+    )
+    Spacer(Modifier.height(12.dp))
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { pair ->
+            val value = pair.first
+            val text = pair.second
+            val on = selected == value
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (on) colors.amber500 else Color.Transparent)
+                    .border(1.dp, if (on) Color.Transparent else colors.border, RoundedCornerShape(50))
+                    .clickable { onSelect(value) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = text,
+                    color = if (on) Color(0xFF101014) else Color.White,
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/** Bottom sheet with the three filter groups and a full-width apply button. */
+@Composable
+private fun BrowseFilterSheet(
+    genres: List<String>,
+    years: List<Int>,
+    languages: List<String>,
+    genre: String,
+    year: String,
+    language: String,
+    onApply: (String, String, String) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = Beam.colors
+    var g by remember { mutableStateOf(genre) }
+    var y by remember { mutableStateOf(year) }
+    var l by remember { mutableStateOf(language) }
+    val scroll = androidx.compose.foundation.rememberScrollState()
+
+    PlatformBackHandler(enabled = true) { onDismiss() }
+
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(onClick = onDismiss),
+        )
+
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                .background(colors.card)
+                .navigationBarsPadding()
+                .padding(24.dp),
+        ) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.border),
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Filters",
+                    color = Color.White,
+                    fontFamily = Fraunces,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "Reset",
+                    color = colors.amber500,
+                    fontFamily = GeistMono,
+                    fontSize = 14.sp,
+                    modifier = Modifier.clickable {
+                        g = ""
+                        y = ""
+                        l = ""
+                        onReset()
+                    },
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(scroll)) {
+                FilterChipSection(
+                    label = "GENRE",
+                    options = listOf("" to "Any") + genres.map { it to it },
+                    selected = g,
+                    onSelect = { g = it },
+                )
+                Spacer(Modifier.height(20.dp))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                Spacer(Modifier.height(20.dp))
+                FilterChipSection(
+                    label = "YEAR",
+                    options = listOf("" to "Any") + years.map { it.toString() to it.toString() },
+                    selected = y,
+                    onSelect = { y = it },
+                )
+                Spacer(Modifier.height(20.dp))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                Spacer(Modifier.height(20.dp))
+                FilterChipSection(
+                    label = "LANGUAGE",
+                    options = listOf("" to "Any") + languages.map { it to it },
+                    selected = l,
+                    onSelect = { l = it },
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(colors.amber500)
+                    .clickable { onApply(g, y, l) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Show Results",
+                    color = Color(0xFF101014),
+                    fontFamily = GeistMono,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
     }
 }
 
