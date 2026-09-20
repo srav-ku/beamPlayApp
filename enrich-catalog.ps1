@@ -82,10 +82,16 @@ Write-Host "Done. Enriched $total rows, $failed failed batches." -ForegroundColo
 Write-Host "Spot-check the last movie touched:"
 try {
     $probeId = if ($ids.Count -gt 0) { $ids[$ids.Count - 1] } else { 0 }
-    $one = Invoke-RestMethod -Method Get -Uri "$Base/movies/$probeId" -Headers $headers -TimeoutSec 60
-    $m   = $one.movie
-    Write-Host ("  id {0} -> rt_rating={1}  metacritic={1}  budget={2}  revenue={3}  trailer_key={4}" -f `
-        $m.rt_rating, $m.metacritic, $m.budget, $m.revenue, $m.trailer_key)
+    if ($probeId -gt 0) {
+        $m = Invoke-RestMethod -Method Get -Uri "$Base/movies/$probeId" -Headers $headers -TimeoutSec 60
+        Write-Host ("  id {0}  {1}" -f $m.id, $m.title)
+        Write-Host ("    rt_rating  = {0}" -f $m.rt_rating)
+        Write-Host ("    metacritic = {0}" -f $m.metacritic)
+        Write-Host ("    budget     = {0}" -f $m.budget)
+        Write-Host ("    revenue    = {0}" -f $m.revenue)
+        Write-Host ("    trailer    = {0}" -f $m.trailer_key)
+        Write-Host ("    director   = {0}" -f $m.director)
+    }
 } catch {
-    Write-Host "  (check skipped: $($_.Exception.Message))" -ForegroundColor Yellow
+    Write-Host "  (spot-check skipped: $($_.Exception.Message))" -ForegroundColor Yellow
 }
