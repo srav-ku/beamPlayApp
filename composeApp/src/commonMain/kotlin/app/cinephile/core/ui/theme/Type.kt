@@ -4,9 +4,12 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import beamplay.composeapp.generated.resources.Res
+import beamplay.composeapp.generated.resources.fraunces
+import beamplay.composeapp.generated.resources.fraunces_italic
 import beamplay.composeapp.generated.resources.geist_mono_medium
 import beamplay.composeapp.generated.resources.geist_mono_regular
 import beamplay.composeapp.generated.resources.geist_mono_semibold
@@ -24,6 +27,16 @@ val GeistMono: FontFamily
         Font(Res.font.geist_mono_regular, FontWeight.Normal),
         Font(Res.font.geist_mono_medium, FontWeight.Medium),
         Font(Res.font.geist_mono_semibold, FontWeight.SemiBold),
+    )
+
+/** Fraunces - display serif for titles, from Google Fonts (variable: opsz/wght/SOFT/WONK). */
+val Fraunces: FontFamily
+    @Composable get() = FontFamily(
+        Font(Res.font.fraunces, FontWeight.Normal),
+        Font(Res.font.fraunces, FontWeight.Medium),
+        Font(Res.font.fraunces, FontWeight.SemiBold),
+        Font(Res.font.fraunces, FontWeight.Bold),
+        Font(Res.font.fraunces_italic, FontWeight.Normal, FontStyle.Italic),
     )
 
 /** Inter — headings (website `--font-heading`). */

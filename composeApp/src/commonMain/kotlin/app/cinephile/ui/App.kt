@@ -63,6 +63,7 @@ import app.cinephile.data.MediaItem
 import app.cinephile.data.SessionManager
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.graphics.graphicsLayer
+import app.cinephile.core.ui.theme.Fraunces
 
 @Composable
 fun App(sessionStore: app.cinephile.data.SessionStore) {
@@ -168,7 +169,7 @@ private fun Splash(onDone: () -> Unit) {
                 Text(
                     "Cine",
                     color = Color(0xFFF5F4F1),
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontFamily = Fraunces,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 40.sp,
                     letterSpacing = tracking.sp,
@@ -176,7 +177,7 @@ private fun Splash(onDone: () -> Unit) {
                 Text(
                     "phile",
                     color = Color(0xFFE8A13A),
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontFamily = Fraunces,
                     fontWeight = FontWeight.SemiBold,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     fontSize = 40.sp,

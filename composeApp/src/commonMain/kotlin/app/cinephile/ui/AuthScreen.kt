@@ -61,6 +61,7 @@ import app.cinephile.data.SessionManager
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
+import app.cinephile.core.ui.theme.Fraunces
 
 /* ------------------------------------------------------------------ *
  * Cinephile auth - built to the reference spec.
@@ -272,8 +273,8 @@ private fun Wordmark(size: Int = 26, centred: Boolean = true) {
         horizontalArrangement = if (centred) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.Bottom,
     ) {
-        Text("Cine", color = Fg, fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold, fontSize = size.sp, letterSpacing = (-0.5).sp)
-        Text("phile", color = Accent, fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold, fontStyle = FontStyle.Italic, fontSize = size.sp, letterSpacing = (-0.5).sp)
+        Text("Cine", color = Fg, fontFamily = Fraunces, fontWeight = FontWeight.SemiBold, fontSize = size.sp, letterSpacing = (-0.5).sp)
+        Text("phile", color = Accent, fontFamily = Fraunces, fontWeight = FontWeight.SemiBold, fontStyle = FontStyle.Italic, fontSize = size.sp, letterSpacing = (-0.5).sp)
     }
 }
 
@@ -299,7 +300,7 @@ private fun WelcomeCard(notice: String?, onGuest: () -> Unit, onGoogle: () -> Un
         Text(
             "Your Go-To",
             color = Fg,
-            fontFamily = FontFamily.Serif,
+            fontFamily = Fraunces,
             fontWeight = FontWeight.SemiBold,
             fontSize = 34.sp,
             lineHeight = 36.sp,
@@ -308,7 +309,7 @@ private fun WelcomeCard(notice: String?, onGuest: () -> Unit, onGoogle: () -> Un
         Text(
             "Movie Site.",
             color = Fg,
-            fontFamily = FontFamily.Serif,
+            fontFamily = Fraunces,
             fontWeight = FontWeight.SemiBold,
             fontSize = 34.sp,
             lineHeight = 36.sp,

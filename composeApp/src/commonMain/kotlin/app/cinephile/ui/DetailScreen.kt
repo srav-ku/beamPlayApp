@@ -65,6 +65,7 @@ import app.cinephile.core.ui.components.ContentCard
 import app.cinephile.ui.player.PlayerSubtitle
 import kotlinx.coroutines.launch
 import app.cinephile.core.ui.theme.Beam
+import app.cinephile.core.ui.theme.Fraunces
 import app.cinephile.core.ui.theme.GeistMono
 import app.cinephile.core.ui.theme.Inter
 import app.cinephile.data.Api
@@ -258,7 +259,7 @@ fun BeamDetailScreen(
                     Spacer(Modifier.height(26.dp))
                     SectionLabel("Cast")
                     Spacer(Modifier.height(12.dp))
-                    cast.take(9).chunked(3).forEach { rowCast ->
+                    cast.take(10).chunked(3).forEach { rowCast ->
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -276,7 +277,7 @@ fun BeamDetailScreen(
                                         fontFamily = GeistMono,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center,
                                     )
@@ -584,7 +585,7 @@ private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
         color = Beam.colors.mutedForeground,
-        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+        fontFamily = Fraunces,
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.sp,
@@ -751,7 +752,7 @@ private fun HeroCard(
                 Text(
                     text = item.title,
                     color = colors.foreground,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontFamily = Fraunces,
                     fontSize = 24.sp,
                     lineHeight = 29.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1056,7 +1057,7 @@ private fun TrackingCard(
             Text(
                 text = "Your Tracking",
                 color = colors.foreground,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontFamily = Fraunces,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
             )

@@ -582,8 +582,10 @@ fun ContinueWatchingResumeCard(
         0f
     }
     val remaining = ((item.durationMs - item.positionMs) / 1000L).coerceAtLeast(0L)
+    val stamp = (item.positionMs / 60000L).toString() + ":" + ((item.positionMs / 1000L) % 60L).toString().padStart(2, '0')
     val remainingLabel = when {
         item.durationMs <= 0L -> "Resume"
+        item.positionMs > 0L -> "Resume from " + stamp
         remaining >= 3600L -> "${remaining / 3600L}h ${(remaining % 3600L) / 60L}m left"
         remaining >= 60L -> "${remaining / 60L} min left"
         else -> "less than a minute left"

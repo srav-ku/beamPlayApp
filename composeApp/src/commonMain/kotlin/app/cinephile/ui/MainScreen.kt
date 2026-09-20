@@ -14,6 +14,7 @@ import app.cinephile.core.ui.components.LoadingSkeleton
 import app.cinephile.core.ui.components.PosterSkeleton
 import app.cinephile.core.ui.components.SectionHeader
 import app.cinephile.core.ui.theme.Beam
+import app.cinephile.core.ui.theme.Fraunces
 import app.cinephile.core.ui.theme.Inter
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -629,7 +630,7 @@ private fun CinephileTopBar(onSearch: () -> Unit) {
             Text(
                 "Cine",
                 color = colors.foreground,
-                fontFamily = FontFamily.Serif,
+                fontFamily = Fraunces,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 22.sp,
                 letterSpacing = (-0.6).sp,
@@ -638,7 +639,7 @@ private fun CinephileTopBar(onSearch: () -> Unit) {
             Text(
                 "phile",
                 color = colors.amber500,
-                fontFamily = FontFamily.Serif,
+                fontFamily = Fraunces,
                 fontWeight = FontWeight.SemiBold,
                 fontStyle = FontStyle.Italic,
                 fontSize = 22.sp,
@@ -748,7 +749,7 @@ private fun SectionTitleRow(title: String, subtitle: String? = null, onSeeAll: (
             Text(
                 title,
                 color = colors.foreground,
-                fontFamily = FontFamily.Serif,
+                fontFamily = Fraunces,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = (-0.3).sp,
