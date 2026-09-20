@@ -87,6 +87,8 @@ import kotlin.math.roundToInt
 fun BeamDetailScreen(
     item: MediaItem,
     onBack: () -> Unit,
+    trailer: app.cinephile.core.model.TmdbVideo? = null,
+    onTrailer: () -> Unit = {},
     onOpenMedia: (MediaItem) -> Unit,
     onPlay: (String, List<PlayerSubtitle>, String) -> Unit,
 ) {
@@ -103,6 +105,7 @@ fun BeamDetailScreen(
     var favorite by remember { mutableStateOf(false) }
     var watched by remember { mutableStateOf(false) }
     var myRating by remember { mutableStateOf(0) }
+    var showTrailer by remember { mutableStateOf(false) }
     var moreLikeThis by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var resolving by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
@@ -114,10 +117,11 @@ fun BeamDetailScreen(
     var showDownloads by remember { mutableStateOf(false) }
 
     // Back closes an open sheet first - never the whole screen underneath it.
-    PlatformBackHandler(enabled = showSources || showDownloads || showPremium) {
+    PlatformBackHandler(enabled = showSources || showDownloads || showPremium || showTrailer) {
         showSources = false
         showDownloads = false
         showPremium = false
+        showTrailer = false
     }
     var resolvingUrl by remember { mutableStateOf<String?>(null) }
     var downloadFiles by remember { mutableStateOf<List<app.cinephile.core.model.DownloadFile>>(emptyList()) }
@@ -172,6 +176,7 @@ fun BeamDetailScreen(
 
 
     val directors = credits?.crew?.filter { it.job == "Director" }?.take(2) ?: emptyList()
+    val trailer = videos.firstOrNull { it.isYouTubeTrailer }
     val cast: List<TmdbCast> = credits?.cast?.take(20) ?: emptyList()
     Box(Modifier.fillMaxSize()) {
     LazyColumn(
@@ -190,6 +195,8 @@ fun BeamDetailScreen(
                 favorite = favorite,
                 watchLater = watchLater,
                 onBack = onBack,
+                trailer = trailer,
+                onTrailer = { showTrailer = true },
                 onPlay = {
                     if (premiumLocked) {
                         premiumRequired = true
@@ -236,7 +243,9 @@ fun BeamDetailScreen(
         // ---- Ratings grid: only the sources we actually have data for ----
         val tmdbRating = item.tmdb_rating?.takeIf { it > 0 }
         val imdbRating = item.imdb_rating?.takeIf { it > 0 }
-        if (tmdbRating != null || imdbRating != null) {
+        val rtRating = item.rt_rating?.takeIf { it.isNotBlank() }
+        val metacritic = item.metacritic?.takeIf { it > 0 }
+        if (tmdbRating != null || imdbRating != null || rtRating != null || metacritic != null) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     Spacer(Modifier.height(24.dp))
@@ -246,6 +255,46 @@ fun BeamDetailScreen(
                         }
                         imdbRating?.let { value ->
                             RatingCard("IMDb", fmt1(value), star = false, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    if (rtRating != null || metacritic != null) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rtRating?.let { value ->
+                                RatingCard("Rotten Tomatoes", value, star = false, tint = Color(0xFFC4503A), modifier = Modifier.weight(1f))
+                            }
+                            metacritic?.let { value ->
+                                RatingCard("Metacritic", value.toString(), star = false, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Box office: only when the enrichment job has filled it in ----
+        val budget = item.budget?.takeIf { it > 0L }
+        val revenue = item.revenue?.takeIf { it > 0L }
+        if (budget != null || revenue != null) {
+            item {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Spacer(Modifier.height(26.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        budget?.let { value ->
+                            RatingCard("Budget", "$" + money(value), star = false, modifier = Modifier.weight(1f))
+                        }
+                        revenue?.let { value ->
+                            RatingCard("Revenue", "$" + money(value), star = false, modifier = Modifier.weight(1f))
+                        }
+                        if (budget != null && revenue != null) {
+                            val profit = revenue - budget
+                            RatingCard(
+                                label = "Profit",
+                                value = (if (profit >= 0) "+$" else "-$") + money(if (profit >= 0) profit else -profit),
+                                star = false,
+                                tint = if (profit >= 0) Color(0xFF6B8E7F) else Color(0xFFC4503A),
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 }
@@ -417,6 +466,15 @@ fun BeamDetailScreen(
             )
         }
 
+        if (showTrailer && trailer != null) {
+            TrailerModal(
+                videoTitle = trailer.name.ifBlank { "Trailer" },
+                videoKey = trailer.key,
+                title = title,
+                onClose = { showTrailer = false },
+            )
+        }
+
         if (showPremium) {
             PremiumSheet(onDismiss = { showPremium = false })
         }
@@ -574,6 +632,12 @@ private fun ActionChip(
     }
 }
 
+private fun money(value: Long): String {
+    val millions = value / 1_000_000.0
+    val tenths = (millions * 10).roundToInt()
+    return (tenths / 10).toString() + "." + (tenths % 10).toString() + "M"
+}
+
 private fun fmt1(value: Double): String {
     val tenths = (value * 10).roundToInt()
     return (tenths / 10).toString() + "." + (tenths % 10).toString()
@@ -665,6 +729,8 @@ private fun HeroCard(
     favorite: Boolean,
     watchLater: Boolean,
     onBack: () -> Unit,
+    trailer: app.cinephile.core.model.TmdbVideo? = null,
+    onTrailer: () -> Unit = {},
     onPlay: () -> Unit,
     onWatchLater: () -> Unit,
     onWatched: () -> Unit,
@@ -870,6 +936,14 @@ private fun HeroCard(
                         primary = false,
                         onClick = onDownload,
                     )
+                    if (trailer != null) {
+                        DetailButton(
+                            label = "Trailer",
+                            icon = Icons.Filled.PlayArrow,
+                            primary = false,
+                            onClick = onTrailer,
+                        )
+                    }
                     DetailButton(
                         label = if (watched) "Watched" else "Mark watched",
                         icon = if (watched) Icons.Filled.CheckCircle else Icons.Filled.CheckCircle,
@@ -895,6 +969,7 @@ private fun RatingCard(
     value: String,
     star: Boolean,
     modifier: Modifier = Modifier,
+    tint: Color = Color.Unspecified,
 ) {
     val colors = Beam.colors
     Column(
@@ -923,7 +998,7 @@ private fun RatingCard(
             }
             Text(
                 text = value,
-                color = colors.foreground,
+                color = if (tint == Color.Unspecified) colors.foreground else tint,
                 fontFamily = GeistMono,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,

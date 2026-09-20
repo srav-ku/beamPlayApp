@@ -19,6 +19,11 @@ data class MediaItem(
     val total_episodes: Int? = null,
     val tmdb_rating: Double? = null,
     val imdb_rating: Double? = null,
+    // Enrichment fields - null until the enrichment job fills them.
+    val rt_rating: String? = null,
+    val metacritic: Int? = null,
+    val budget: Long? = null,
+    val revenue: Long? = null,
     val genres: String? = null,
     val type: String? = null,
 ) {
