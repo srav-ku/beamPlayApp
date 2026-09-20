@@ -313,7 +313,8 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
                 .background(BeamColors.bg),
         ) {
             // Bottom padding leaves room for the floating bar so content is never hidden.
-            Box(Modifier.weight(1f).padding(bottom = 78.dp)) {
+            // Clearance for the floating bar only when no sheet is covering the screen.
+            Box(Modifier.weight(1f).padding(bottom = if (overlayOpen) 0.dp else 78.dp)) {
                 when (tab) {
                     Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search }, onResumeContinue = onResumeContinue)
                     Tab.Browse -> BrowseTab(handleCardClick, onOverlayChange = { overlayOpen = it })
@@ -1874,6 +1875,12 @@ private fun BrowseFilterSheet(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 .background(colors.card)
+                // Swallow taps on the sheet's own empty space so they cannot
+                // reach the scrim behind it and dismiss the sheet.
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                ) {}
                 .navigationBarsPadding()
                 .padding(24.dp),
         ) {
@@ -1999,7 +2006,6 @@ private fun BrowseFilterSheet(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
         }
     }
 }
