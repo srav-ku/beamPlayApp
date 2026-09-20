@@ -200,6 +200,8 @@ private fun Splash(onDone: () -> Unit) {
 private fun AppNavHost() {
     var backStack by remember { mutableStateOf(listOf<MediaItem>()) }
     var playback by remember { mutableStateOf<PlaybackRequest?>(null) }
+    // Last tab the user was on, so back from a detail screen returns there.
+    var mainTab by remember { mutableStateOf(app.cinephile.ui.Tab.Home) }
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -233,6 +235,8 @@ private fun AppNavHost() {
         }
 
         current == null -> MainScreen(
+            initialTab = mainTab,
+            onTabChange = { mainTab = it },
             onOpenMedia = { backStack = backStack + it },
             subtitleSettings = { BeamSubtitleSettingsScreen() },
             onResumeContinue = { ci ->

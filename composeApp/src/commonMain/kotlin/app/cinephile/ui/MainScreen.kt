@@ -277,8 +277,11 @@ fun RequestModalDialog(
 }
 
 @Composable
-fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}) {
+fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}, onTabChange: (Tab) -> Unit = {}) {
     var tab by remember { mutableStateOf(initialTab) }
+    // Report the active tab so returning from a detail screen lands back here,
+    // on the same tab, instead of resetting to Home.
+    LaunchedEffect(tab) { onTabChange(tab) }
     // True while a full-screen sheet (e.g. browse filters) owns the screen.
     var overlayOpen by remember { mutableStateOf(false) }
     var requestItem by remember { mutableStateOf<MediaItem?>(null) }
@@ -583,6 +586,7 @@ private fun HomeTab(
                     w.tmdb_id != null && discoveryItems.any { it.tmdb_id == w.tmdb_id }
                 }
                 val pick = if (pickPool.isEmpty()) null else pickPool[pickTick % pickPool.size]
+                if (pick != null) {
                 item {
                     Column(Modifier.fillMaxWidth()) {
                         SectionTitleRow(
@@ -592,15 +596,7 @@ private fun HomeTab(
                         )
                         Spacer(Modifier.height(12.dp))
                         Box(Modifier.padding(horizontal = 16.dp)) {
-                            if (pick == null) {
-                                EmptyStateCard(
-                                    icon = "\u2726",
-                                    title = "Add titles to Watch Later",
-                                    body = "Tap the + on any card and we will pick one for you when you cannot decide what to watch.",
-                                    cta = "Search the catalog",
-                                    onCta = onOpenSearch,
-                                )
-                            } else {
+                            run {
                                 PickForMeCard(
                                     item = pick,
                                     source = "My List",
@@ -617,13 +613,13 @@ private fun HomeTab(
                         }
                     }
                 }
+                }
 
                 // ---- 4. Because you like {Genre} ----
-                if (genreItems.isNotEmpty()) {
+                if (railGenre != null && genreItems.isNotEmpty()) {
                     item {
                         HomeSection(
-                            title = railGenre?.let { "Because you like " + it }
-                                ?: (genreName?.let { "Popular in " + it } ?: "Recommended for You"),
+                            title = "Because you like " + railGenre,
                         ) {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),

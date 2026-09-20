@@ -247,43 +247,36 @@ fun BeamDetailScreen(
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     Spacer(Modifier.height(24.dp))
-                    val topRow = 1 + (if (imdbRating != null) 1 else 0)
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (topRow == 1) Arrangement.Center else Arrangement.spacedBy(12.dp),
-                    ) {
-                        tmdbRating?.let { value ->
-                            RatingCard(
-                                label = "TMDB", value = fmt1(value), star = true,
-                                modifier = if (topRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
-                            )
+                    // Always two columns, so a card is the same size whether one,
+                    // two, three or four ratings exist. A missing slot is filled with
+                    // an invisible spacer - never by stretching its neighbour.
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (tmdbRating != null) {
+                            RatingCard(label = "TMDB", value = fmt1(tmdbRating), star = true, modifier = Modifier.weight(1f))
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
-                        imdbRating?.let { value ->
-                            RatingCard(
-                                label = "IMDb", value = fmt1(value), star = false,
-                                modifier = if (topRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
-                            )
+                        if (imdbRating != null) {
+                            RatingCard(label = "IMDb", value = fmt1(imdbRating), star = false, modifier = Modifier.weight(1f))
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                     if (rtRating != null || metacritic != null) {
-                        val bottomRow = 1 + (if (metacritic != null) 1 else 0)
                         Spacer(Modifier.height(12.dp))
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (bottomRow == 1) Arrangement.Center else Arrangement.spacedBy(12.dp),
-                        ) {
-                            rtRating?.let { value ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (rtRating != null) {
                                 RatingCard(
-                                    label = "Rotten Tomatoes", value = value, star = false,
-                                    tint = Color(0xFFEF4444),
-                                    modifier = if (bottomRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
+                                    label = "Rotten Tomatoes", value = rtRating, star = false,
+                                    tint = Color(0xFFEF4444), modifier = Modifier.weight(1f),
                                 )
+                            } else {
+                                Spacer(Modifier.weight(1f))
                             }
-                            metacritic?.let { value ->
-                                RatingCard(
-                                    label = "Metacritic", value = value.toString(), star = false,
-                                    modifier = if (bottomRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
-                                )
+                            if (metacritic != null) {
+                                RatingCard(label = "Metacritic", value = metacritic.toString(), star = false, modifier = Modifier.weight(1f))
+                            } else {
+                                Spacer(Modifier.weight(1f))
                             }
                         }
                     }
@@ -302,11 +295,15 @@ fun BeamDetailScreen(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        budget?.let { value ->
-                            RatingCard("Budget", "$" + money(value), star = false, compact = true, modifier = Modifier.weight(1f))
+                        if (budget != null) {
+                            RatingCard("Budget", "$" + money(budget), star = false, compact = true, modifier = Modifier.weight(1f))
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
-                        revenue?.let { value ->
-                            RatingCard("Revenue", "$" + money(value), star = false, compact = true, modifier = Modifier.weight(1f))
+                        if (revenue != null) {
+                            RatingCard("Revenue", "$" + money(revenue), star = false, compact = true, modifier = Modifier.weight(1f))
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
                         if (budget != null && revenue != null) {
                             val profit = revenue - budget
@@ -704,6 +701,7 @@ private fun DetailButton(
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -957,7 +955,7 @@ private fun HeroCard(
 
             // ---- one wrapping action row: three labelled primaries, then the
             // two tracking toggles as icon-only buttons ----
-            // Row 1: the four primaries, equal width.
+            // Two per row: four buttons on one line clipped their labels.
             Row(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -976,6 +974,12 @@ private fun HeroCard(
                     modifier = Modifier.weight(1f),
                     onClick = onWatchLater,
                 )
+            }
+
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 DetailButton(
                     label = "Download",
                     icon = Icons.Filled.Download,
@@ -991,6 +995,8 @@ private fun HeroCard(
                         modifier = Modifier.weight(1f),
                         onClick = onTrailer,
                     )
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
             }
 
@@ -1161,7 +1167,7 @@ private fun RatingCard(
     val shape = RoundedCornerShape(if (compact) 10.dp else 12.dp)
     Column(
         modifier = modifier
-            .height(if (compact) 56.dp else 64.dp)
+            .height(if (compact) 60.dp else 76.dp)
             .clip(shape)
             .background(colors.card)
             .border(1.dp, colors.border, shape)
