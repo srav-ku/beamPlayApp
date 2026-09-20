@@ -32,10 +32,14 @@ import androidx.compose.ui.unit.sp
 import app.cinephile.core.ui.theme.Beam
 import app.cinephile.core.ui.theme.Fraunces
 import app.cinephile.core.ui.theme.PillShape
+import androidx.compose.foundation.layout.width
 
 /** The YouTube embed itself. Android renders it in a WebView. */
 @Composable
 expect fun PlatformYouTubeEmbed(videoKey: String, modifier: Modifier)
+
+/** Opens a URL in the system browser / YouTube app. */
+expect fun openExternalUrl(url: String)
 
 /**
  * Full-screen trailer overlay, per the Cinephile spec: 90% black backdrop, a
@@ -95,6 +99,12 @@ fun TrailerModal(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                     )
+                }
+                Spacer(Modifier.width(12.dp))
+                // Escape hatch: some trailers have embedding disabled by the
+                // owner, and no WebView trick can play those (YouTube error 153).
+                GhostChip("Watch on YouTube") {
+                    openExternalUrl("https://www.youtube.com/watch?v=" + videoKey)
                 }
             }
         }
