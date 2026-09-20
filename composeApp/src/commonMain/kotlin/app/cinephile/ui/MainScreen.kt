@@ -367,6 +367,7 @@ private fun HomeTab(
     var kind by remember { mutableStateOf("Movies") }
     var pickTick by remember { mutableStateOf(0) }
     var showAllContinue by remember { mutableStateOf(false) }
+    var railGenre by remember { mutableStateOf<String?>(null) }
     // Session-scoped Watch Later: real behaviour, no backend needed yet.
     var watchLater by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
@@ -427,6 +428,19 @@ private fun HomeTab(
             errorMessage = "${e::class.simpleName}: ${e.message ?: "Network error"}"
         } finally {
             loading = false
+        }
+    }
+
+    // The genre rail is only personalised from a real signal - the user's own
+    // list. Without one it stays a plain "Popular in X" row, never a fake
+    // "Because you like X".
+    LaunchedEffect(watchLater) {
+        val liked = watchLater.flatMap { it.genreList() }
+            .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+        if (liked != null && liked != railGenre) {
+            railGenre = liked
+            genreItems = runCatching { Api.movies(genre = liked, limit = 20).items }
+                .getOrDefault(emptyList())
         }
     }
 
@@ -500,23 +514,23 @@ private fun HomeTab(
                 }
                 item {
                     Column(Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        // Section pills get their own full-width row: sharing a row with
+                        // the media toggle was clipping "Top Rated".
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            LazyRow(
-                                modifier = Modifier.weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                item {
-                                    PillGroup(
-                                        options = listOf("Trending", "Popular", "Top Rated", "Latest"),
-                                        selected = discovery,
-                                        onSelect = { discovery = it },
-                                    )
-                                }
+                            item {
+                                PillGroup(
+                                    options = listOf("Trending", "Popular", "Top Rated", "Latest"),
+                                    selected = discovery,
+                                    onSelect = { discovery = it },
+                                )
                             }
-                            Spacer(Modifier.width(8.dp))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                             PillGroup(
                                 options = listOf("Movies", "TV"),
                                 selected = kind,
@@ -562,14 +576,18 @@ private fun HomeTab(
                     }
                 }
 
-                // ---- 3. Pick for Me ----
-                val pool = if (watchLater.isNotEmpty()) watchLater else (trendingMovies + trendingSeries)
-                val pick = if (pool.isEmpty()) null else pool[pickTick % pool.size]
+                // ---- 3. Pick for Me: personal only. It draws from the user's own
+                // list, never from trending, so it can never look like a random
+                // content dump or repeat the rail above it.
+                val pickPool = watchLater.filterNot { w ->
+                    w.tmdb_id != null && discoveryItems.any { it.tmdb_id == w.tmdb_id }
+                }
+                val pick = if (pickPool.isEmpty()) null else pickPool[pickTick % pickPool.size]
                 item {
                     Column(Modifier.fillMaxWidth()) {
                         SectionTitleRow(
                             title = "Pick for Me",
-                            subtitle = if (watchLater.isNotEmpty()) "from Watch Later" else "trending now",
+                            subtitle = if (pick != null) "from your list" else null,
                             action = { PillButton("Shuffle", primary = false) { pickTick++ } },
                         )
                         Spacer(Modifier.height(12.dp))
@@ -585,7 +603,7 @@ private fun HomeTab(
                             } else {
                                 PickForMeCard(
                                     item = pick,
-                                    source = if (watchLater.isNotEmpty()) "Watch Later" else "Trending",
+                                    source = "My List",
                                     onView = { onOpenMedia(pick) },
                                     onAdd = {
                                         watchLater = if (watchLater.any { it.tmdb_id == pick.tmdb_id }) {
@@ -604,14 +622,15 @@ private fun HomeTab(
                 if (genreItems.isNotEmpty()) {
                     item {
                         HomeSection(
-                            title = genreName?.let { "Because you like " + it } ?: "Recommended for You",
+                            title = railGenre?.let { "Because you like " + it }
+                                ?: (genreName?.let { "Popular in " + it } ?: "Recommended for You"),
                         ) {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 itemsIndexed(
-                                    items = genreItems,
+                                    items = genreItems.filterNot { g -> discoveryItems.any { it.tmdb_id == g.tmdb_id } },
                                     key = { idx, item -> "genre_" + (genreName ?: "rec") + "_" + item.tmdb_id + "_" + idx },
                                 ) { _, item ->
                                     DiscoveryCard(
@@ -891,7 +910,7 @@ private fun DiscoveryCard(
                     .padding(10.dp)
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(if (added) colors.amber500.copy(alpha = 0.30f) else Color(0x80000000))
+                    .background(if (added) colors.amber500.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.50f))
                     .border(
                         1.dp,
                         if (added) colors.amber500.copy(alpha = 0.60f) else Color(0x26FFFFFF),
@@ -901,7 +920,7 @@ private fun DiscoveryCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (added) Icons.Filled.Check else Icons.Filled.Add,
+                    imageVector = if (added) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                     contentDescription = if (added) "Remove from Watch Later" else "Add to Watch Later",
                     tint = if (added) colors.amber500 else Color(0xD9FFFFFF),
                     modifier = Modifier.size(16.dp),
@@ -1442,6 +1461,7 @@ private fun BrowseTab(
 
     // Hide the bottom bar while the filter sheet is up.
     LaunchedEffect(showFilters) { onOverlayChange(showFilters) }
+
 
     LaunchedEffect(gridState) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
