@@ -21,6 +21,7 @@ data class MediaItem(
     val imdb_rating: Double? = null,
     // Enrichment fields - null until the enrichment job fills them.
     val rt_rating: String? = null,
+    val trailer_key: String? = null,
     val metacritic: Int? = null,
     val budget: Long? = null,
     val revenue: Long? = null,

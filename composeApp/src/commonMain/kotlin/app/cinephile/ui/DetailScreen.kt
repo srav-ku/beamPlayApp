@@ -73,6 +73,9 @@ import app.cinephile.data.MediaItem
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextAlign
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.fillMaxHeight
 
 /**
  * Title detail screen.
@@ -177,6 +180,11 @@ fun BeamDetailScreen(
 
     val directors = credits?.crew?.filter { it.job == "Director" }?.take(2) ?: emptyList()
     val trailer = videos.firstOrNull { it.isYouTubeTrailer }
+        ?: item.trailer_key?.takeIf { it.isNotBlank() }?.let { key ->
+            app.cinephile.core.model.TmdbVideo(key = key, site = "YouTube", type = "Trailer", name = "Trailer")
+        }
+    // Hero resume bar: match this title against the local playback memory.
+    val resumeItem = remember(item.id) { localContinueWatching().firstOrNull { it.title == item.title } }
     val cast: List<TmdbCast> = credits?.cast?.take(20) ?: emptyList()
     Box(Modifier.fillMaxSize()) {
     LazyColumn(
@@ -195,6 +203,7 @@ fun BeamDetailScreen(
                 favorite = favorite,
                 watchLater = watchLater,
                 onBack = onBack,
+                resume = resumeItem,
                 trailer = trailer,
                 onTrailer = { showTrailer = true },
                 onPlay = {
@@ -227,7 +236,7 @@ fun BeamDetailScreen(
         // ---- Overview ----
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(24.dp))
                 SectionLabel("Overview")
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -249,22 +258,37 @@ fun BeamDetailScreen(
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     Spacer(Modifier.height(24.dp))
+                    val topRow = 1 + (if (imdbRating != null) 1 else 0)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         tmdbRating?.let { value ->
-                            RatingCard("TMDB", fmt1(value), star = true, modifier = Modifier.weight(1f))
+                            RatingCard(
+                                label = "TMDB", value = fmt1(value), star = true,
+                                modifier = if (topRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                            )
                         }
                         imdbRating?.let { value ->
-                            RatingCard("IMDb", fmt1(value), star = false, modifier = Modifier.weight(1f))
+                            RatingCard(
+                                label = "IMDb", value = fmt1(value), star = false,
+                                modifier = if (topRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                            )
                         }
                     }
                     if (rtRating != null || metacritic != null) {
+                        val bottomRow = 1 + (if (metacritic != null) 1 else 0)
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             rtRating?.let { value ->
-                                RatingCard("Rotten Tomatoes", value, star = false, tint = Color(0xFFC4503A), modifier = Modifier.weight(1f))
+                                RatingCard(
+                                    label = "Rotten Tomatoes", value = value, star = false,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = if (bottomRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                                )
                             }
                             metacritic?.let { value ->
-                                RatingCard("Metacritic", value.toString(), star = false, modifier = Modifier.weight(1f))
+                                RatingCard(
+                                    label = "Metacritic", value = value.toString(), star = false,
+                                    modifier = if (bottomRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                                )
                             }
                         }
                     }
@@ -278,7 +302,7 @@ fun BeamDetailScreen(
         if (budget != null || revenue != null) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    Spacer(Modifier.height(26.dp))
+                    Spacer(Modifier.height(24.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         budget?.let { value ->
                             RatingCard("Budget", "$" + money(value), star = false, modifier = Modifier.weight(1f))
@@ -292,7 +316,7 @@ fun BeamDetailScreen(
                                 label = "Profit",
                                 value = (if (profit >= 0) "+$" else "-$") + money(if (profit >= 0) profit else -profit),
                                 star = false,
-                                tint = if (profit >= 0) Color(0xFF6B8E7F) else Color(0xFFC4503A),
+                                tint = if (profit >= 0) Color(0xFF10B981) else Color(0xFFEF4444),
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -301,11 +325,19 @@ fun BeamDetailScreen(
             }
         }
 
+        // ---- Your Tracking: rating only; watched/favourite live in the hero ----
+        item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(24.dp))
+                TrackingCard(rating = myRating, onRating = { myRating = it })
+            }
+        }
+
         // ---- Cast: 3 columns, circular portraits, name + character ----
         if (cast.isNotEmpty()) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    Spacer(Modifier.height(26.dp))
+                    Spacer(Modifier.height(24.dp))
                     SectionLabel("Cast")
                     Spacer(Modifier.height(12.dp))
                     cast.take(10).chunked(3).forEach { rowCast ->
@@ -396,7 +428,7 @@ fun BeamDetailScreen(
         if (moreLikeThis.isNotEmpty()) {
             item {
                 Column(Modifier.fillMaxWidth()) {
-                    Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(24.dp))
                     Column(Modifier.padding(horizontal = 16.dp)) { SectionLabel("More Like This") }
                     Spacer(Modifier.height(12.dp))
                     LazyRow(
@@ -416,21 +448,6 @@ fun BeamDetailScreen(
                         }
                     }
                 }
-            }
-        }
-
-        // ---- Your Tracking ----
-        item {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Spacer(Modifier.height(28.dp))
-                TrackingCard(
-                    watched = watched,
-                    favorite = favorite,
-                    rating = myRating,
-                    onWatched = { watched = !watched },
-                    onFavorite = { favorite = !favorite },
-                    onRating = { myRating = it },
-                )
             }
         }
 
@@ -718,8 +735,8 @@ private fun DetailButton(
  * The hero: backdrop with a gradient into the page colour, poster, serif title,
  * meta row, genre pills, director credit and the action row.
  */
-@Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
 private fun HeroCard(
     item: MediaItem,
     directors: List<String>,
@@ -728,14 +745,15 @@ private fun HeroCard(
     watched: Boolean,
     favorite: Boolean,
     watchLater: Boolean,
+    resume: ContinueItem?,
     onBack: () -> Unit,
-    trailer: app.cinephile.core.model.TmdbVideo? = null,
-    onTrailer: () -> Unit = {},
     onPlay: () -> Unit,
     onWatchLater: () -> Unit,
     onWatched: () -> Unit,
     onFavorite: () -> Unit,
     onDownload: () -> Unit,
+    trailer: app.cinephile.core.model.TmdbVideo? = null,
+    onTrailer: () -> Unit = {},
 ) {
     val colors = Beam.colors
     val isSeries = item.type == "series"
@@ -749,6 +767,8 @@ private fun HeroCard(
             .border(1.dp, colors.border, RoundedCornerShape(26.dp)),
     ) {
         Column {
+            // ---- backdrop: melts into the page colour, carries the back button
+            // and (when partially watched) the resume bar ----
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                 val heroPath = item.backdrop_path ?: item.poster_path
                 Api.backdropUrl(heroPath, "w780")?.let { url ->
@@ -760,7 +780,6 @@ private fun HeroCard(
                     )
                 } ?: Box(Modifier.fillMaxSize().background(colors.card))
 
-                // Gradient into the page colour so the hero melts into the screen.
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -792,12 +811,45 @@ private fun HeroCard(
                     )
                 }
 
-                // Poster pinned bottom-left of the backdrop.
+                resume?.let { r ->
+                    val fraction = if (r.durationMs > 0L) {
+                        (r.positionMs.toFloat() / r.durationMs.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    if (fraction > 0f || r.positionMs > 0L) {
+                        Column(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 10.dp)) {
+                            Text(
+                                text = "Resume from " + stampOf(r.positionMs),
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontFamily = GeistMono,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .background(Color(0x33FFFFFF)),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(fraction)
+                                    .fillMaxHeight()
+                                    .background(colors.amber500),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ---- poster straddles the boundary between image and content ----
+            Row(Modifier.padding(start = 14.dp, end = 14.dp)) {
                 Box(
                     Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 14.dp, bottom = 0.dp)
-                        .width(92.dp)
+                        .offset(y = (-38).dp)
+                        .width(96.dp)
                         .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(18.dp))
                         .background(colors.muted)
@@ -812,156 +864,266 @@ private fun HeroCard(
                         )
                     }
                 }
-            }
 
-            Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 16.dp)) {
-                Text(
-                    text = item.title,
-                    color = colors.foreground,
-                    fontFamily = Fraunces,
-                    fontSize = 24.sp,
-                    lineHeight = 29.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = (-0.4).sp,
-                )
+                Spacer(Modifier.width(12.dp))
 
-                Spacer(Modifier.height(8.dp))
+                Column(Modifier.padding(top = 10.dp)) {
+                    Text(
+                        text = item.title,
+                        color = colors.foreground,
+                        fontFamily = Fraunces,
+                        fontSize = 24.sp,
+                        lineHeight = 29.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = (-0.4).sp,
+                    )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item.tmdb_rating?.takeIf { it > 0 }?.let { rating ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Star,
-                                contentDescription = null,
-                                tint = Color(0xFFF0B457),
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item.tmdb_rating?.takeIf { it > 0 }?.let { rating ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF0B457),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = fmt1(rating),
+                                    color = Color(0xFFF0B457),
+                                    fontFamily = GeistMono,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                            Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
+                        }
+                        item.year?.let {
                             Text(
-                                text = fmt1(rating),
-                                color = Color(0xFFF0B457),
+                                text = it.toString(),
+                                color = colors.mutedForeground,
                                 fontFamily = GeistMono,
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
                             )
+                            Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
                         }
-                        Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
-                    }
-                    item.year?.let {
                         Text(
-                            text = it.toString(),
+                            text = if (isSeries) {
+                                val seasons = item.total_seasons ?: 0
+                                if (seasons > 0) "$seasons season" + (if (seasons > 1) "s" else "") else "\u2014"
+                            } else {
+                                val runtime = item.runtime ?: 0
+                                if (runtime > 0) (runtime / 60).toString() + "h " + (runtime % 60).toString() + "m" else "\u2014"
+                            },
                             color = colors.mutedForeground,
                             fontFamily = GeistMono,
                             fontSize = 14.sp,
                         )
                         Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
-                    }
-                    Text(
-                        text = if (isSeries) {
-                            val seasons = item.total_seasons ?: 0
-                            if (seasons > 0) "$seasons season" + (if (seasons > 1) "s" else "") else "\u2014"
-                        } else {
-                            val runtime = item.runtime ?: 0
-                            if (runtime > 0) (runtime / 60).toString() + "h " + (runtime % 60).toString() + "m" else "\u2014"
-                        },
-                        color = colors.mutedForeground,
-                        fontFamily = GeistMono,
-                        fontSize = 14.sp,
-                    )
-                    Text("\u00B7", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 14.sp)
-                    Text(
-                        text = if (isSeries) "TV" else "MOVIE",
-                        color = colors.mutedForeground,
-                        fontFamily = GeistMono,
-                        fontSize = 12.sp,
-                        letterSpacing = 0.6.sp,
-                    )
-                }
-
-                val genres = item.genreList().take(4)
-                if (genres.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    androidx.compose.foundation.layout.FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        genres.forEach { genre -> MetaPill(genre) }
-                    }
-                }
-
-                if (directors.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Row {
                         Text(
-                            text = "Directed by ",
+                            text = if (isSeries) "TV" else "MOVIE",
                             color = colors.mutedForeground,
                             fontFamily = GeistMono,
-                            fontSize = 13.sp,
-                        )
-                        Text(
-                            text = directors.joinToString(", "),
-                            color = colors.amber500,
-                            fontFamily = GeistMono,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            fontSize = 12.sp,
+                            letterSpacing = 0.6.sp,
                         )
                     }
-                }
 
-                Spacer(Modifier.height(16.dp))
-
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    DetailButton(
-                        label = if (resolving) "Loading\u2026" else "Play",
-                        icon = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
-                        primary = true,
-                        onClick = onPlay,
-                    )
-                    DetailButton(
-                        label = "My List",
-                        icon = if (watchLater) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                        primary = false,
-                        onClick = onWatchLater,
-                    )
-                    DetailButton(
-                        label = "Download",
-                        icon = Icons.Filled.Download,
-                        primary = false,
-                        onClick = onDownload,
-                    )
-                    if (trailer != null) {
-                        DetailButton(
-                            label = "Trailer",
-                            icon = Icons.Filled.PlayArrow,
-                            primary = false,
-                            onClick = onTrailer,
-                        )
+                    val genres = item.genreList().take(4)
+                    if (genres.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        androidx.compose.foundation.layout.FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            genres.forEach { genre -> MetaPill(genre) }
+                        }
                     }
+
+                    if (directors.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Row {
+                            Text(
+                                text = "Directed by ",
+                                color = colors.mutedForeground,
+                                fontFamily = GeistMono,
+                                fontSize = 13.sp,
+                            )
+                            Text(
+                                text = directors.joinToString(", "),
+                                color = colors.amber500,
+                                fontFamily = GeistMono,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ---- one wrapping action row: three labelled primaries, then the
+            // two tracking toggles as icon-only buttons ----
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DetailButton(
+                    label = if (resolving) "Loading\u2026" else "Play",
+                    icon = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
+                    primary = true,
+                    onClick = onPlay,
+                )
+                DetailButton(
+                    label = "My List",
+                    icon = if (watchLater) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                    primary = false,
+                    onClick = onWatchLater,
+                )
+                DetailButton(
+                    label = "Download",
+                    icon = Icons.Filled.Download,
+                    primary = false,
+                    onClick = onDownload,
+                )
+                if (trailer != null) {
                     DetailButton(
-                        label = if (watched) "Watched" else "Mark watched",
-                        icon = if (watched) Icons.Filled.CheckCircle else Icons.Filled.CheckCircle,
+                        label = "Trailer",
+                        icon = Icons.Filled.PlayArrow,
                         primary = false,
-                        onClick = onWatched,
-                    )
-                    DetailButton(
-                        label = if (favorite) "Favorite" else "Add to favorites",
-                        icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        primary = false,
-                        onClick = onFavorite,
+                        onClick = onTrailer,
                     )
                 }
+                IconToggleButton(
+                    icon = if (watched) Icons.Filled.CheckCircle else Icons.Filled.CheckCircle,
+                    contentDescription = if (watched) "Watched" else "Mark watched",
+                    active = watched,
+                    onClick = onWatched,
+                )
+                IconToggleButton(
+                    icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = if (favorite) "Favorite" else "Add to favorites",
+                    active = favorite,
+                    onClick = onFavorite,
+                )
             }
         }
     }
 }
 
+/** Square-ish icon toggle for the hero: amber when active, outline otherwise. */
+@Composable
+private fun IconToggleButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = Beam.colors
+    Box(
+        Modifier
+            .height(36.dp)
+            .size(36.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (active) colors.amber500.copy(alpha = 0.18f) else Color.Transparent)
+            .border(
+                1.dp,
+                if (active) colors.amber500.copy(alpha = 0.55f) else colors.border,
+                RoundedCornerShape(50),
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (active) colors.amber500 else colors.foreground.copy(alpha = 0.9f),
+            modifier = Modifier.size(17.dp),
+        )
+    }
+}
+
+private fun stampOf(positionMs: Long): String {
+    val minutes = positionMs / 60000L
+    val seconds = (positionMs / 1000L) % 60L
+    return minutes.toString() + ":" + seconds.toString().padStart(2, '0')
+}
+
+/**
+ * Personal rating only. Watched / favourite live in the hero as icon toggles -
+ * repeating them here was duplication, so this card does one job.
+ */
+@Composable
+private fun TrackingCard(rating: Int, onRating: (Int) -> Unit) {
+    val colors = Beam.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(26.dp))
+            .background(colors.card)
+            .border(1.dp, colors.amber500.copy(alpha = 0.20f), RoundedCornerShape(26.dp))
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                tint = colors.amber500,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = "Your Tracking",
+                color = colors.foreground,
+                fontFamily = Fraunces,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            text = "Your rating",
+            color = colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (1..5).forEach { star ->
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = "$star stars",
+                    tint = if (star <= rating) Color(0xFFF0B457) else colors.mutedForeground.copy(alpha = 0.40f),
+                    modifier = Modifier.size(24.dp).clickable { onRating(star) },
+                )
+            }
+            if (rating > 0) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "$rating/5",
+                    color = colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Ratings are kept on this device for now.",
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 11.sp,
+        )
+    }
+}
 /** One ratings-grid cell: muted label above a bold value. */
 @Composable
 private fun RatingCard(
@@ -1100,96 +1262,5 @@ private fun RailCard(
                 }
             }
         }
-    }
-}
-
-/** Watched / favorite toggles plus a 5-star personal rating. */
-@Composable
-private fun TrackingCard(
-    watched: Boolean,
-    favorite: Boolean,
-    rating: Int,
-    onWatched: () -> Unit,
-    onFavorite: () -> Unit,
-    onRating: (Int) -> Unit,
-) {
-    val colors = Beam.colors
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
-            .background(colors.card)
-            .border(1.dp, colors.amber500.copy(alpha = 0.20f), RoundedCornerShape(26.dp))
-            .padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(
-                imageVector = Icons.Filled.CheckCircle,
-                contentDescription = null,
-                tint = colors.amber500,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = "Your Tracking",
-                color = colors.foreground,
-                fontFamily = Fraunces,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DetailButton(
-                label = if (watched) "Watched" else "Mark watched",
-                icon = Icons.Filled.CheckCircle,
-                primary = false,
-                onClick = onWatched,
-            )
-            DetailButton(
-                label = if (favorite) "Favorite" else "Add to favorites",
-                icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                primary = false,
-                onClick = onFavorite,
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = "Your rating",
-            color = colors.foreground,
-            fontFamily = GeistMono,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (1..5).forEach { star ->
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = "$star stars",
-                    tint = if (star <= rating) Color(0xFFF0B457) else colors.mutedForeground.copy(alpha = 0.40f),
-                    modifier = Modifier.size(22.dp).clickable { onRating(star) },
-                )
-            }
-            if (rating > 0) {
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = "$rating/5",
-                    color = colors.mutedForeground,
-                    fontFamily = GeistMono,
-                    fontSize = 13.sp,
-                )
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Ratings are kept on this device for now.",
-            color = colors.mutedForeground,
-            fontFamily = GeistMono,
-            fontSize = 11.sp,
-        )
     }
 }
