@@ -115,6 +115,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -276,6 +279,8 @@ fun RequestModalDialog(
 @Composable
 fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}) {
     var tab by remember { mutableStateOf(initialTab) }
+    // True while a full-screen sheet (e.g. browse filters) owns the screen.
+    var overlayOpen by remember { mutableStateOf(false) }
     var requestItem by remember { mutableStateOf<MediaItem?>(null) }
     var isCheckingDb by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -311,7 +316,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
             Box(Modifier.weight(1f).padding(bottom = 78.dp)) {
                 when (tab) {
                     Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search }, onResumeContinue = onResumeContinue)
-                    Tab.Browse -> BrowseTab(handleCardClick)
+                    Tab.Browse -> BrowseTab(handleCardClick, onOverlayChange = { overlayOpen = it })
                     Tab.Movies -> CatalogTab(kind = "movies", handleCardClick)
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
                     Tab.Search -> SearchTab(handleCardClick)
@@ -322,13 +327,16 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
 
         }
 
+        // Hidden while a full-screen sheet is open, so the sheet owns the screen.
         val navTabs = remember { listOf(Tab.Home, Tab.Browse, Tab.Library, Tab.Profile) }
-        BeamBottomNav(
-            items = navTabs.map { BeamNavItem(it.label, it.icon) },
-            selectedIndex = navTabs.indexOf(tab).coerceAtLeast(0),
-            onSelect = { index -> tab = navTabs[index] },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        if (!overlayOpen) {
+            BeamBottomNav(
+                items = navTabs.map { BeamNavItem(it.label, it.icon) },
+                selectedIndex = navTabs.indexOf(tab),
+                onSelect = { index -> tab = navTabs[index] },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
 
         // Checking indicator overlay
         if (isCheckingDb) {
@@ -1344,7 +1352,10 @@ private fun CatalogTab(kind: String, onOpenMedia: (MediaItem) -> Unit) {
 }
 
 @Composable
-private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
+private fun BrowseTab(
+    onOpenMedia: (MediaItem) -> Unit,
+    onOverlayChange: (Boolean) -> Unit = {},
+) {
     var kind by remember { mutableStateOf("movies") }
     var items by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var page by remember { mutableStateOf(1) }
@@ -1413,6 +1424,9 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
         loadPage(1, replace = true)
     }
 
+    // Hide the bottom bar while the filter sheet is up.
+    LaunchedEffect(showFilters) { onOverlayChange(showFilters) }
+
     LaunchedEffect(gridState) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
             .collect { last ->
@@ -1473,34 +1487,53 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Row(
+            BoxWithConstraints(
                 Modifier
+                    .width(228.dp)
                     .height(40.dp)
                     .clip(RoundedCornerShape(50))
                     .background(colors.card)
                     .border(1.dp, colors.border, RoundedCornerShape(50))
                     .padding(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                listOf("movies" to "Movies", "series" to "TV Shows").forEach { pair ->
-                    val on = kind == pair.first
-                    Box(
-                        Modifier
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (on) colors.amber500 else Color.Transparent)
-                            .clickable { kind = pair.first }
-                            .padding(horizontal = 22.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = pair.second,
-                            color = if (on) Color(0xFF101014) else colors.mutedForeground,
-                            fontFamily = GeistMono,
-                            fontSize = 14.sp,
-                            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                            maxLines = 1,
-                        )
+                val segment = (maxWidth - 6.dp) / 2
+                val target = if (kind == "movies") 0.dp else segment
+                // The amber pill glides between the two labels.
+                val pillX by androidx.compose.animation.core.animateDpAsState(
+                    targetValue = target,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                    ),
+                    label = "browse-segment",
+                )
+                Box(
+                    Modifier
+                        .offset(x = pillX)
+                        .width(segment)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.amber500),
+                )
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    listOf("movies" to "Movies", "series" to "TV Shows").forEach { pair ->
+                        val on = kind == pair.first
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable { kind = pair.first },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = pair.second,
+                                color = if (on) Color(0xFF101014) else colors.mutedForeground,
+                                fontFamily = GeistMono,
+                                fontSize = 14.sp,
+                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
