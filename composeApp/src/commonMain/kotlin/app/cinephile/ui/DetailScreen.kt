@@ -109,7 +109,6 @@ fun BeamDetailScreen(
     var watched by remember { mutableStateOf(false) }
     var myRating by remember { mutableStateOf(0) }
     var showTrailer by remember { mutableStateOf(false) }
-    var moreLikeThis by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var resolving by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
     var showPremium by remember { mutableStateOf(false) }
@@ -161,16 +160,6 @@ fun BeamDetailScreen(
                 premiumRequired = locked
                 if (!locked) sources = emptyList()
             }
-    }
-
-    // More Like This: same first genre, straight from the catalog.
-    LaunchedEffect(item.id) {
-        val genre = item.genreList().firstOrNull()
-        if (!genre.isNullOrBlank()) {
-            moreLikeThis = runCatching {
-                Api.movies(genre = genre, limit = 12).items.filter { it.tmdb_id != item.tmdb_id }
-            }.getOrDefault(emptyList())
-        }
     }
 
     val title = item.title
@@ -396,12 +385,12 @@ fun BeamDetailScreen(
             }
         }
 
-        // ---- Similar Movies ----
+        // ---- More Like This: TMDB's own similar titles for this movie ----
         if (similar.isNotEmpty()) {
             item {
                 Column(Modifier.fillMaxWidth()) {
-                    Spacer(Modifier.height(10.dp))
-                    Column(Modifier.padding(horizontal = 16.dp)) { SectionLabel("Similar Movies") }
+                    Spacer(Modifier.height(24.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) { SectionLabel("More Like This") }
                     Spacer(Modifier.height(12.dp))
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -414,6 +403,7 @@ fun BeamDetailScreen(
                                 posterPath = rec.poster_path,
                                 rating = rec.vote_average,
                                 year = rec.displayYear.take(4).toIntOrNull(),
+                                modifier = Modifier.fillParentMaxWidth(0.82f),
                                 onClick = {
                                     onOpenMedia(
                                         MediaItem(
@@ -430,33 +420,6 @@ fun BeamDetailScreen(
                                         ),
                                     )
                                 },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // ---- More Like This: same genre, from the catalog ----
-        if (moreLikeThis.isNotEmpty()) {
-            item {
-                Column(Modifier.fillMaxWidth()) {
-                    Spacer(Modifier.height(24.dp))
-                    Column(Modifier.padding(horizontal = 16.dp)) { SectionLabel("More Like This") }
-                    Spacer(Modifier.height(12.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        itemsIndexed(moreLikeThis) { _, rec ->
-                            RailCard(
-                                title = rec.title,
-                                backdropPath = rec.backdrop_path,
-                                posterPath = rec.poster_path,
-                                rating = rec.tmdb_rating,
-                                year = rec.year,
-                                modifier = Modifier.fillParentMaxWidth(0.82f),
-                                onClick = { onOpenMedia(rec) },
                             )
                         }
                     }
