@@ -311,19 +311,9 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
 
         }
 
-        // Floating glass bar: five destinations, hovering over the content.
-        val navItems = remember {
-            listOf(
-                BeamNavItem("Movies", Icons.Filled.Movie),
-                BeamNavItem("TV Series", Icons.Filled.Tv),
-                BeamNavItem("Discover", Icons.Filled.Explore),
-                BeamNavItem("Bookmarks", Icons.Filled.Bookmark),
-                BeamNavItem("Profile", Icons.Filled.Person),
-            )
-        }
-        val navTabs = remember { listOf(Tab.Movies, Tab.Series, Tab.Home, Tab.Library, Tab.Profile) }
+        val navTabs = remember { listOf(Tab.Home, Tab.Browse, Tab.Library, Tab.Profile) }
         BeamBottomNav(
-            items = navItems,
+            items = navTabs.map { BeamNavItem(it.label, it.icon) },
             selectedIndex = navTabs.indexOf(tab).coerceAtLeast(0),
             onSelect = { index -> tab = navTabs[index] },
             modifier = Modifier.align(Alignment.BottomCenter),
