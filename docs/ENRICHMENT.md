@@ -40,8 +40,11 @@ with:
 
 ## Edit 3 — after line 1073: paste the batch handler
 
-`handleAdminUpdateMovie` ends at line 1073. Paste this **immediately after that
-closing brace**, before the `// SYNC SERIES SEASONS` comment on line 1075:
+`handleAdminUpdateMovie` ends around line 1073. Paste the **v2 handler** from
+`docs/enrich-handler.js` there — it uses the worker's own `tmdbGet()` helper and
+returns an `errors[]` array so any failure names itself. (The earlier inline
+draft was deleted from this document because it swallowed TMDB errors: RT and
+Metacritic worked, but budget/revenue/trailer/director silently stayed NULL.)
 
 ```js
 // ============================================================================
