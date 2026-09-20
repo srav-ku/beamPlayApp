@@ -76,6 +76,7 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 
 /**
  * Title detail screen.
@@ -250,33 +251,26 @@ fun BeamDetailScreen(
                     // Always two columns, so a card is the same size whether one,
                     // two, three or four ratings exist. A missing slot is filled with
                     // an invisible spacer - never by stretching its neighbour.
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (tmdbRating != null) {
-                            RatingCard(label = "TMDB", value = fmt1(tmdbRating), star = true, modifier = Modifier.weight(1f))
-                        } else {
-                            Spacer(Modifier.weight(1f))
-                        }
-                        if (imdbRating != null) {
-                            RatingCard(label = "IMDb", value = fmt1(imdbRating), star = false, modifier = Modifier.weight(1f))
-                        } else {
-                            Spacer(Modifier.weight(1f))
-                        }
-                    }
-                    if (rtRating != null || metacritic != null) {
-                        Spacer(Modifier.height(12.dp))
+                    // Flowing grid: cards fill left to right at a constant half
+                    // width. Missing slots simply are not drawn - no stretched card,
+                    // no hole in the middle.
+                    val ratingCards = listOfNotNull(
+                        tmdbRating?.let { Triple("TMDB", fmt1(it), true) },
+                        imdbRating?.let { Triple("IMDb", fmt1(it), false) },
+                        rtRating?.let { Triple("Rotten Tomatoes", it, false) },
+                        metacritic?.let { Triple("Metacritic", it.toString(), false) },
+                    )
+                    ratingCards.chunked(2).forEachIndexed { rowIndex, rowCards ->
+                        if (rowIndex > 0) Spacer(Modifier.height(12.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (rtRating != null) {
+                            rowCards.forEach { card ->
                                 RatingCard(
-                                    label = "Rotten Tomatoes", value = rtRating, star = false,
-                                    tint = Color(0xFFEF4444), modifier = Modifier.weight(1f),
+                                    label = card.first,
+                                    value = card.second,
+                                    star = card.third,
+                                    tint = if (card.first == "Rotten Tomatoes") Color(0xFFEF4444) else Color.Unspecified,
+                                    modifier = if (rowCards.size == 1) Modifier.fillMaxWidth(0.5f) else Modifier.weight(1f),
                                 )
-                            } else {
-                                Spacer(Modifier.weight(1f))
-                            }
-                            if (metacritic != null) {
-                                RatingCard(label = "Metacritic", value = metacritic.toString(), star = false, modifier = Modifier.weight(1f))
-                            } else {
-                                Spacer(Modifier.weight(1f))
                             }
                         }
                     }
@@ -295,15 +289,31 @@ fun BeamDetailScreen(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        if (budget != null) {
-                            RatingCard("Budget", "$" + money(budget), star = false, compact = true, modifier = Modifier.weight(1f))
-                        } else {
-                            Spacer(Modifier.weight(1f))
-                        }
-                        if (revenue != null) {
-                            RatingCard("Revenue", "$" + money(revenue), star = false, compact = true, modifier = Modifier.weight(1f))
-                        } else {
-                            Spacer(Modifier.weight(1f))
+                        val moneyCards = listOfNotNull(
+                            budget?.let { Triple("Budget", "$" + money(it), false) },
+                            revenue?.let { Triple("Revenue", "$" + money(it), false) },
+                            if (budget != null && revenue != null) {
+                                val profit = revenue - budget
+                                Triple(
+                                    "Profit",
+                                    (if (profit >= 0) "+$" else "-$") + money(if (profit >= 0) profit else -profit),
+                                    true,
+                                )
+                            } else null,
+                        )
+                        moneyCards.forEach { card ->
+                            RatingCard(
+                                label = card.first,
+                                value = card.second,
+                                star = false,
+                                compact = true,
+                                tint = if (card.third) {
+                                    if (card.second.startsWith("+")) Color(0xFF10B981) else Color(0xFFEF4444)
+                                } else {
+                                    Color.Unspecified
+                                },
+                                modifier = if (moneyCards.size == 1) Modifier.fillMaxWidth(0.34f) else Modifier.weight(1f),
+                            )
                         }
                         if (budget != null && revenue != null) {
                             val profit = revenue - budget
@@ -1167,7 +1177,7 @@ private fun RatingCard(
     val shape = RoundedCornerShape(if (compact) 10.dp else 12.dp)
     Column(
         modifier = modifier
-            .height(if (compact) 60.dp else 76.dp)
+            .heightIn(min = if (compact) 62.dp else 78.dp)
             .clip(shape)
             .background(colors.card)
             .border(1.dp, colors.border, shape)
@@ -1180,11 +1190,13 @@ private fun RatingCard(
             color = colors.mutedForeground,
             fontFamily = GeistMono,
             fontSize = 10.sp,
-            letterSpacing = 0.6.sp,
+            letterSpacing = 0.3.sp,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (star) {
                 Icon(
@@ -1198,8 +1210,9 @@ private fun RatingCard(
                 text = value,
                 color = if (tint == Color.Unspecified) colors.foreground else tint,
                 fontFamily = GeistMono,
-                fontSize = if (compact) 16.sp else 20.sp,
+                fontSize = if (compact) 16.sp else 19.sp,
                 fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
             )
         }
     }

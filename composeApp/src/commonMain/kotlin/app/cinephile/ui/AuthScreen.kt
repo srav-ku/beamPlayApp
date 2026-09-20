@@ -216,7 +216,7 @@ fun AuthScreen(onAuthed: () -> Unit = {}) {
                                 }
                             },
                         )
-                    } else {
+                    } else if (step == "name") {
                         NameCard(
                             name = name,
                             isGuest = guest,
@@ -229,7 +229,7 @@ fun AuthScreen(onAuthed: () -> Unit = {}) {
                                 if (g == null) {
                                     println("[CinephileAuth] guest continue, name='$typed'")
                                     SessionManager.set(Session(method = "guest", displayName = typed))
-                                    onAuthed()
+                                    step = "interests"
                                 } else {
                                     busy = true
                                     notice = null
@@ -251,12 +251,15 @@ fun AuthScreen(onAuthed: () -> Unit = {}) {
                                                     displayName = typed,
                                                 ),
                                             )
-                                            onAuthed()
+                                            step = "interests"
                                         }
                                     }
                                 }
                             },
                         )
+                    } else {
+                        // New account: one quick interest pick before entering the app.
+                        InterestsCard(onDone = onAuthed)
                     }
                 }
             }

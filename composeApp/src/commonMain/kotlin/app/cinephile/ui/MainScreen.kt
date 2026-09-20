@@ -371,6 +371,11 @@ private fun HomeTab(
     var pickTick by remember { mutableStateOf(0) }
     var showAllContinue by remember { mutableStateOf(false) }
     var railGenre by remember { mutableStateOf<String?>(null) }
+    var interestPicks by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    // Genres chosen at sign-up - the only personal signal we have until there is
+    // real watch history.
+    var interests by remember { mutableStateOf(loadInterests()) }
+    var showInterests by remember { mutableStateOf(false) }
     // Session-scoped Watch Later: real behaviour, no backend needed yet.
     var watchLater by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
@@ -437,6 +442,20 @@ private fun HomeTab(
     // The genre rail is only personalised from a real signal - the user's own
     // list. Without one it stays a plain "Popular in X" row, never a fake
     // "Because you like X".
+    // Interest shelf: only when the user actually told us something. The shuffle
+    // re-rolls both the pick and the genre it comes from.
+    LaunchedEffect(interests, pickTick) {
+        if (interests.isNotEmpty()) {
+            val genre = interests[pickTick % interests.size]
+            val fetched = runCatching {
+                Api.movies(genre = genre, sort = "rating", limit = 20).items
+            }.getOrDefault(emptyList())
+            interestPicks = fetched
+            railGenre = genre
+            genreItems = fetched
+        }
+    }
+
     LaunchedEffect(watchLater) {
         val liked = watchLater.flatMap { it.genreList() }
             .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
@@ -582,24 +601,32 @@ private fun HomeTab(
                 // ---- 3. Pick for Me: personal only. It draws from the user's own
                 // list, never from trending, so it can never look like a random
                 // content dump or repeat the rail above it.
-                val pickPool = watchLater.filterNot { w ->
+                val pickPool = (if (watchLater.isNotEmpty()) watchLater else interestPicks).filterNot { w ->
                     w.tmdb_id != null && discoveryItems.any { it.tmdb_id == w.tmdb_id }
                 }
                 val pick = if (pickPool.isEmpty()) null else pickPool[pickTick % pickPool.size]
-                if (pick != null) {
                 item {
                     Column(Modifier.fillMaxWidth()) {
                         SectionTitleRow(
                             title = "Pick for Me",
-                            subtitle = if (pick != null) "from your list" else null,
+                            subtitle = if (pick == null) null else if (watchLater.isNotEmpty()) "from your list" else "based on your interests",
                             action = { PillButton("Shuffle", primary = false) { pickTick++ } },
                         )
                         Spacer(Modifier.height(12.dp))
                         Box(Modifier.padding(horizontal = 16.dp)) {
-                            run {
+                            if (pick == null) {
+                                EmptyStateCard(
+                                    icon = "\u2726",
+                                    title = "Tell us what you like",
+                                    body = "Pick a few genres and we will suggest something from the catalogue. Watching will then teach us more." ,
+                                    cta = "Pick your interests",
+                                    onCta = { showInterests = true },
+                                )
+                            } else {
+                                run {
                                 PickForMeCard(
                                     item = pick,
-                                    source = "My List",
+                                    source = if (watchLater.isNotEmpty()) "My List" else "Your interests",
                                     onView = { onOpenMedia(pick) },
                                     onAdd = {
                                         watchLater = if (watchLater.any { it.tmdb_id == pick.tmdb_id }) {
@@ -651,6 +678,25 @@ private fun HomeTab(
         }
 
         // Full-screen list of everything in progress (reached via "View all").
+        item {
+            if (showInterests) {
+                Dialog(
+                    onDismissRequest = { showInterests = false },
+                    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+                ) {
+                    Box(Modifier.fillMaxSize().background(Beam.colors.background)) {
+                        InterestsCard(
+                            onDone = {
+                                interests = loadInterests()
+                                showInterests = false
+                                pickTick++
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
         item {
             if (showAllContinue) {
                 ContinueWatchingAllScreen(
