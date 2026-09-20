@@ -13,7 +13,9 @@ param(
     [string]$Base     = "https://beamplay.beam-api.workers.dev",
     [string]$Email    = "chanducharan2030@gmail.com",
     [string]$Password = "",
-    [int]   $Batch    = 20,     # ids per /admin/enrich call (worker caps at 50)
+    [int]   $Batch    = 10,     # ids per /admin/enrich call. 10 works with the current
+                            # worker; after pasting the v4 handler you can raise it to 20.
+                            # (Cloudflare allows 50 subrequests per request; each movie costs 2.)
     [int]   $MaxPages = 40      # 40 pages x 50 rows = up to 2000 movies
 )
 

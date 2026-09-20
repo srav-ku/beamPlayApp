@@ -7,7 +7,7 @@
 //   B) Add one line just before `export default beamWorker;` (line 2719):
 //
 //         beamWorker.scheduled = async (event, env, ctx) => {
-//             ctx.waitUntil(runStaleEnrichment(env, 25));
+//             ctx.waitUntil(runStaleEnrichment(env, 20));
 //         };
 //
 //   C) SQL once:  ALTER TABLE movies ADD COLUMN enriched_at INTEGER;
@@ -138,17 +138,28 @@ async function handleAdminEnrich(request, env, params) {
 
     if (body.mode === 'stale') {
         mode = 'stale';
-        movies = await pickStaleIds(env, Math.min(50, body.limit || 25));
+        movies = await pickStaleIds(env, Math.min(20, body.limit || 20));
     } else {
         const ids = Array.isArray(body.ids) ? body.ids : [];
         if (ids.length === 0) {
             return errJson('send { ids: [1,2] } or { mode: "stale" }', 400, env);
         }
-        if (ids.length > 50) return errJson('max 50 ids per call', 400, env);
+        if (ids.length > 24) return errJson('max 24 ids per call - each costs 2 subrequests and Cloudflare caps a request at 50', 400, env);
+        // ONE query for the whole batch. The old version issued one SELECT per
+        // id, which is what blew Cloudflare's 50-subrequest-per-request limit:
+        // 20 ids meant 20 SELECTs + 40 upstream calls = 60 subrequests -> HTTP 500.
+        const wanted = ids.map(n => Number(n)).filter(n => Number.isFinite(n));
+        const placeholders = wanted.map(() => '?').join(',');
+        const rows = wanted.length
+            ? await tursoQueryAll(
+                  `SELECT id, tmdb_id, imdb_id FROM movies WHERE id IN (${placeholders})`,
+                  wanted,
+                  env
+              )
+            : [];
+        const byId = new Map((rows || []).map(r => [r.id, r]));
         for (const id of ids) {
-            const movie = await tursoQueryOne(
-                'SELECT id, tmdb_id, imdb_id FROM movies WHERE id = ?', [id], env
-            );
+            const movie = byId.get(Number(id));
             if (!movie || !movie.tmdb_id) { skipped.push(id); continue; }
             movies.push(movie);
         }
