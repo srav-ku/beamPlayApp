@@ -1,70 +1,91 @@
-# Enrichment job — filling the remaining Detail cards
+# Enrichment — exact placement (worker lines from the 2615-line worker)
 
-The Detail screen is built to render four rating cards (TMDB, IMDb, Rotten
-Tomatoes, Metacritic) and a Box Office row (Budget, Revenue, Profit). TMDB and
-IMDb come from data we already have. The other three need enrichment:
+The worker **already has** `TMDB_API_KEY`, `OMDB_API_KEY` (lines 32-33) and an
+`omdbGet(imdbId, env)` helper (line 228). **No new credentials are needed.**
 
-- **Rotten Tomatoes** and **Metacritic** are *not* in the TMDB API. OMDb returns
-  both (`Ratings[]` contains Rotten Tomatoes; `Metascore` is Metacritic).
-- **Budget / Revenue** are in TMDB's `movie/{id}` response (`budget`, `revenue`).
+Four edits, then the SQL, then one call.
 
-## 1. Schema (additive — no existing data is touched)
+---
 
-```sql
--- Safe to re-run: each statement is guarded by the column check in the runner.
-ALTER TABLE movies ADD COLUMN rt_rating    TEXT;     -- "93%"  (Rotten Tomatoes)
-ALTER TABLE movies ADD COLUMN metacritic   INTEGER;  -- 77     (Metacritic)
-ALTER TABLE movies ADD COLUMN budget       INTEGER;  -- USD
-ALTER TABLE movies ADD COLUMN revenue      INTEGER;  -- USD
-ALTER TABLE movies ADD COLUMN trailer_key  TEXT;     -- YouTube key
-ALTER TABLE movies ADD COLUMN director      TEXT;    -- "Christopher Nolan"
-ALTER TABLE movies ADD COLUMN director_tmdb_id INTEGER;
-```
+## Edit 1 — line 407: make the API return the new fields
 
-These are `ADD COLUMN` only: existing rows keep their values, and every new
-column is nullable, so nothing that reads `movies` today changes behaviour.
-The rollback path is the existing `beambot-backup-2026-09-17` branch.
-
-## 2. Worker endpoint (paste into the worker, then deploy)
+The app can only see what `MOVIE_COLS` selects. Replace lines **407-408**:
 
 ```js
-// POST /admin/enrich  { ids: [1,2,3] }  - header x-admin-key must equal ADMIN_KEY
-async function handleAdminEnrich(request, env) {
-    const key = request.headers.get('x-admin-key');
-    if (!key || key !== cfg(env, 'ADMIN_KEY')) return errJson('forbidden', 403, env);
+const MOVIE_COLS = `id, tmdb_id, imdb_id, title, overview, poster_path, backdrop_path,
+                    release_year, runtime, tmdb_rating, imdb_rating, "cast", genres, created_at`;
+```
 
+with:
+
+```js
+const MOVIE_COLS = `id, tmdb_id, imdb_id, title, overview, poster_path, backdrop_path,
+                    release_year, runtime, tmdb_rating, imdb_rating, "cast", genres, created_at,
+                    rt_rating, metacritic, budget, revenue, trailer_key, director, director_tmdb_id`;
+```
+
+## Edit 2 — line 1064: let the fields through the existing update endpoint
+
+Inside `handleAdminUpdateMovie`, replace the whitelist line:
+
+```js
+    for (const k of ['title', 'overview', 'poster_path', 'backdrop_path', 'release_year', 'runtime', 'tmdb_rating', 'imdb_rating', 'cast', 'genres']) {
+```
+
+with:
+
+```js
+    for (const k of ['title', 'overview', 'poster_path', 'backdrop_path', 'release_year', 'runtime', 'tmdb_rating', 'imdb_rating', 'cast', 'genres', 'rt_rating', 'metacritic', 'budget', 'revenue', 'trailer_key', 'director', 'director_tmdb_id']) {
+```
+
+## Edit 3 — after line 1073: paste the batch handler
+
+`handleAdminUpdateMovie` ends at line 1073. Paste this **immediately after that
+closing brace**, before the `// SYNC SERIES SEASONS` comment on line 1075:
+
+```js
+// ============================================================================
+// ADMIN - ENRICH (Rotten Tomatoes + Metacritic + box office + trailer)
+// POST /admin/enrich   { ids: [1,2,3] }
+// ============================================================================
+async function handleAdminEnrich(request, env, params) {
     const body = await readBody(request);
     const ids = Array.isArray(body.ids) ? body.ids : [];
-    const omdbKey = cfg(env, 'OMDB_API_KEY');
+    if (ids.length === 0) return errJson('ids array is required', 400, env);
+    if (ids.length > 50) return errJson('max 50 ids per call', 400, env);
+
     let updated = 0;
+    const skipped = [];
 
     for (const id of ids) {
         const movie = await tursoQueryOne(
             'SELECT id, tmdb_id, imdb_id FROM movies WHERE id = ?', [id], env
         );
-        if (!movie || !movie.tmdb_id) continue;
+        if (!movie || !movie.tmdb_id) { skipped.push(id); continue; }
 
-        // Budget / revenue come from TMDB itself.
-        const tmdb = await (await fetch(
-            `https://api.themoviedb.org/3/movie/${movie.tmdb_id}?api_key=${cfg(env, 'TMDB_API_KEY')}`
-        )).json();
-
-        // RT + Metacritic come from OMDb, keyed by IMDb id.
-        let rt = null, metacritic = null;
-        if (omdbKey && movie.imdb_id) {
-            const omdb = await (await fetch(
-                `https://www.omdbapi.com/?apikey=${omdbKey}&i=${movie.imdb_id}`
-            )).json();
-            if (omdb && omdb.Response !== 'False') {
-                metacritic = parseInt(omdb.Metascore, 10);
-                if (isNaN(metacritic)) metacritic = null;
-                const rtEntry = (omdb.Ratings || []).find(r => r.Source === 'Rotten Tomatoes');
-                rt = rtEntry ? rtEntry.Value : null;
-            }
-        }
-
+        // Budget / revenue / trailer / director come from TMDB.
+        const tmdbRes = await fetch(
+            `https://api.themoviedb.org/3/movie/${movie.tmdb_id}?api_key=${cfg(env, 'TMDB_API_KEY')}&append_to_response=videos,credits`,
+            { headers: { Accept: 'application/json' } }
+        );
+        const tmdb = tmdbRes.ok ? await tmdbRes.json() : {};
         const trailer = (tmdb.videos?.results || [])
             .find(v => v.site === 'YouTube' && v.type === 'Trailer');
+        const director = (tmdb.credits?.crew || []).find(c => c.job === 'Director');
+
+        // Rotten Tomatoes + Metacritic come from OMDb.
+        let rt = null;
+        let metacritic = null;
+        const imdbId = movie.imdb_id || tmdb.imdb_id;
+        if (imdbId) {
+            const omdb = await omdbGet(imdbId, env);
+            if (omdb && omdb.Response !== 'False') {
+                const rtEntry = (omdb.Ratings || []).find(r => r.Source === 'Rotten Tomatoes');
+                rt = rtEntry ? rtEntry.Value : null;
+                const mc = parseInt(omdb.Metascore, 10);
+                metacritic = Number.isNaN(mc) ? null : mc;
+            }
+        }
 
         await tursoRun(
             `UPDATE movies SET
@@ -72,57 +93,90 @@ async function handleAdminEnrich(request, env) {
                 metacritic = COALESCE(?, metacritic),
                 budget = COALESCE(?, budget),
                 revenue = COALESCE(?, revenue),
-                trailer_key = COALESCE(?, trailer_key)
+                trailer_key = COALESCE(?, trailer_key),
+                director = COALESCE(?, director),
+                director_tmdb_id = COALESCE(?, director_tmdb_id)
              WHERE id = ?`,
-            [rt, metacritic, tmdb.budget || null, tmdb.revenue || null,
-             trailer ? trailer.key : null, id],
+            [
+                rt,
+                metacritic,
+                tmdb.budget ? tmdb.budget : null,
+                tmdb.revenue ? tmdb.revenue : null,
+                trailer ? trailer.key : null,
+                director ? director.name : null,
+                director ? director.id : null,
+                id,
+            ],
             env
         );
         updated++;
     }
-    return json({ ok: true, updated }, 200, env);
+
+    return json({ ok: true, updated, skipped }, 200, env);
 }
 ```
 
-Route it next to the other admin route:
+## Edit 4 — line 2533: register the route
+
+Inside the `ROUTES` array (starts at line 2484). Add one line right after:
 
 ```js
-if (path === '/admin/enrich' && method === 'POST') return handleAdminEnrich(request, env);
+    ['PATCH', '/admin/movies/:id', handleAdminUpdateMovie, 'admin'],   // line 2533
 ```
 
-Environment variables to add (as *variables*, like `FIREBASE_PROJECT_ID`):
-`OMDB_API_KEY`, `TMDB_API_KEY`, `ADMIN_KEY`.
+so it reads:
 
-## 3. Include the new columns in the responses the app reads
+```js
+    ['PATCH', '/admin/movies/:id', handleAdminUpdateMovie, 'admin'],
+    ['POST', '/admin/enrich', handleAdminEnrich, 'admin'],
+```
 
-`SELECT *` on `movies` already returns them. If the movie list/detail handlers
-enumerate columns explicitly, add `rt_rating, metacritic, budget, revenue,
-trailer_key, director, director_tmdb_id`.
+Then **deploy** the worker.
 
-## 4. What changes in the app
+---
 
-Nothing further: `MediaItem` already declares `rt_rating`, `metacritic`,
-`budget` and `revenue`. The Detail screen renders those cards **only when the
-value is non-null**, so the moment the worker starts returning them they appear.
-The Trailer button behaves the same way — it exists on screen only when TMDB
-returns a YouTube trailer, which the app already fetches live.
+## SQL — run in Turso
 
-## 5. Running it
+```sql
+ALTER TABLE movies ADD COLUMN rt_rating    TEXT;
+ALTER TABLE movies ADD COLUMN metacritic   INTEGER;
+ALTER TABLE movies ADD COLUMN budget       INTEGER;
+ALTER TABLE movies ADD COLUMN revenue      INTEGER;
+ALTER TABLE movies ADD COLUMN trailer_key  TEXT;
+ALTER TABLE movies ADD COLUMN director      TEXT;
+ALTER TABLE movies ADD COLUMN director_tmdb_id INTEGER;
+```
+
+**`SQLite error: duplicate column name: director` is not a problem.** It means
+that column already exists — skip it and run the rest. `ALTER TABLE ... ADD
+COLUMN` is purely additive: it never rewrites, moves or drops existing rows, so
+existing data cannot be affected. Run one statement at a time and ignore only
+the "duplicate column" errors; any other error is real.
+
+---
+
+## Run the enrichment
 
 ```bash
-# enrich one batch
 curl -X POST https://beamplay.beam-api.workers.dev/admin/enrich \
   -H "content-type: application/json" \
-  -H "x-admin-key: $ADMIN_KEY" \
+  -H "authorization: Bearer <admin user's JWT>" \
   -d '{"ids":[1,2,3,4,5]}'
 ```
 
-Batches keep each request inside the worker CPU limit; a few hundred ids is a
-reasonable schedule (cron every few minutes) until the catalog is covered.
+The route is `authMode: 'admin'`, so it uses the worker's existing admin check —
+the same token your admin screens already use. Batch 50 ids per call.
 
-## Note on what is *not* here
+---
 
-Cast photos, director id and trailer keys come from TMDB and already work in the
-app. Only RT, Metacritic and box office need this job — and RT/Metacritic
-specifically need an OMDb key, which is why this is the one piece that needs a
-credential from you.
+## Verify
+
+```bash
+curl "https://beamplay.beam-api.workers.dev/movies/1" | grep -o 'rt_rating[^,]*'
+```
+
+`"rt_rating":"93%"` means the app will show the Rotten Tomatoes and Metacritic
+cards the next time that title is opened — no app rebuild needed, because
+`MediaItem` already declares those fields and the cards render only when the
+value is non-null. The Trailer button is independent of all this: it appears
+whenever TMDB returns a YouTube trailer, which the app already fetches live.
