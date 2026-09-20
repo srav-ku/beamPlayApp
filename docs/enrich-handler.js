@@ -1,21 +1,21 @@
 // ============================================================================
-// ADMIN - ENRICH  (corrected)
-// POST /admin/enrich   { ids: [1,2,3] }
+// ADMIN - ENRICH  (v2 - uses the worker's own tmdbGet helper, reports errors)
+// POST /admin/enrich   { ids: [214] }
 //
-// Paste this OVER the handleAdminEnrich function in the worker.
-// Requires NO new environment variables:
-//   - auth comes from the ROUTES entry ('admin'), so the router already checked
-//     the admin JWT before this runs. The old x-admin-key check is removed -
-//     it depended on an ADMIN_KEY variable that does not exist, which made the
-//     endpoint answer 403 every single time.
-//   - TMDB_API_KEY and OMDB_API_KEY already exist in the worker (lines 32-33).
+// PASTE THIS OVER the existing handleAdminEnrich function (the one starting
+// near line 1097 and ending with "return json({ ok: true, updated }, 200, env);").
+// Nothing else in the worker changes. No new environment variables.
 //
-// Fixes over the first version:
-//   1. append_to_response=videos,credits  -> tmdb.videos was always undefined,
-//      so trailer_key could never be written. Now it is.
-//   2. imdb id falls back to tmdb.imdb_id -> many rows have a NULL imdb_id, and
-//      those were silently skipped for RT + Metacritic.
-//   3. director + director_tmdb_id are filled from TMDB crew.
+// Why v2:
+//   v1 called TMDB with a hand-written fetch and swallowed any failure, so
+//   budget/revenue/trailer/director came back NULL with no explanation.
+//   v2 uses the worker's own tmdbGet() - the same helper the import flow
+//   already uses successfully - and returns an `errors` array so a failure
+//   names itself instead of going quiet.
+//
+// The response now looks like:
+//   { ok: true, updated: 3, skipped: [], errors: [] }
+//   { ok: true, updated: 0, skipped: [1], errors: [{ id: 214, step: 'tmdb', message: 'TMDB 401: ...' }] }
 // ============================================================================
 async function handleAdminEnrich(request, env, params) {
     const body = await readBody(request);
@@ -25,6 +25,7 @@ async function handleAdminEnrich(request, env, params) {
 
     let updated = 0;
     const skipped = [];
+    const errors = [];
 
     for (const id of ids) {
         const movie = await tursoQueryOne(
@@ -32,24 +33,21 @@ async function handleAdminEnrich(request, env, params) {
         );
         if (!movie || !movie.tmdb_id) { skipped.push(id); continue; }
 
-        // Budget / revenue / trailer key / director all come from TMDB.
-        let tmdb = {};
+        // TMDB: budget, revenue, trailer key, director, imdb id.
+        let t = {};
         try {
-            const tmdbRes = await fetch(
-                `https://api.themoviedb.org/3/movie/${movie.tmdb_id}?api_key=***, 'TMDB_API_KEY')}&append_to_response=videos,credits`,
-                { headers: { Accept: 'application/json' } }
-            );
-            if (tmdbRes.ok) tmdb = await tmdbRes.json();
-        } catch (_) { /* leave tmdb empty; COALESCE keeps old values */ }
+            t = await tmdbGet(
+                `/movie/${movie.tmdb_id}?append_to_response=videos,credits,external_ids`,
+                env
+            ) || {};
+        } catch (e) {
+            errors.push({ id, step: 'tmdb', message: String((e && e.message) || e).slice(0, 200) });
+        }
 
-        const trailer = (tmdb.videos?.results || [])
-            .find(v => v.site === 'YouTube' && v.type === 'Trailer');
-        const director = (tmdb.credits?.crew || []).find(c => c.job === 'Director');
-
-        // Rotten Tomatoes + Metacritic come from OMDb.
+        // OMDb: Rotten Tomatoes + Metacritic.
         let rt = null;
         let metacritic = null;
-        const imdbId = movie.imdb_id || tmdb.imdb_id;
+        const imdbId = movie.imdb_id || t.imdb_id || (t.external_ids && t.external_ids.imdb_id);
         if (imdbId) {
             try {
                 const omdb = await omdbGet(imdbId, env);
@@ -59,8 +57,19 @@ async function handleAdminEnrich(request, env, params) {
                     const mc = parseInt(omdb.Metascore, 10);
                     metacritic = isNaN(mc) ? null : mc;
                 }
-            } catch (_) { /* leave RT/metacritic null */ }
+            } catch (e) {
+                errors.push({ id, step: 'omdb', message: String((e && e.message) || e).slice(0, 200) });
+            }
         }
+
+        const videos = (t.videos && t.videos.results) || [];
+        const trailer =
+            videos.find(v => v.site === 'YouTube' && v.type === 'Trailer') ||
+            videos.find(v => v.site === 'YouTube' && v.type === 'Teaser') ||
+            videos.find(v => v.site === 'YouTube');
+
+        const crew = (t.credits && t.credits.crew) || [];
+        const director = crew.find(c => c.job === 'Director');
 
         await tursoRun(
             `UPDATE movies SET
@@ -75,8 +84,8 @@ async function handleAdminEnrich(request, env, params) {
             [
                 rt,
                 metacritic,
-                tmdb.budget ? tmdb.budget : null,
-                tmdb.revenue ? tmdb.revenue : null,
+                t.budget ? t.budget : null,
+                t.revenue ? t.revenue : null,
                 trailer ? trailer.key : null,
                 director ? director.name : null,
                 director ? director.id : null,
@@ -87,5 +96,5 @@ async function handleAdminEnrich(request, env, params) {
         updated++;
     }
 
-    return json({ ok: true, updated, skipped }, 200, env);
+    return json({ ok: true, updated, skipped, errors }, 200, env);
 }
