@@ -77,11 +77,12 @@ for ($page = 1; $page -le $MaxPages; $page++) {
 
 Write-Host ""
 Write-Host "Done. Enriched $total rows, $failed failed batches." -ForegroundColor Green
-Write-Host "Spot-check one movie:"
+Write-Host "Spot-check the last movie touched:"
 try {
-    $one = Invoke-RestMethod -Method Get -Uri "$Base/movies/1" -Headers $headers -TimeoutSec 60
+    $probeId = if ($ids.Count -gt 0) { $ids[$ids.Count - 1] } else { 0 }
+    $one = Invoke-RestMethod -Method Get -Uri "$Base/movies/$probeId" -Headers $headers -TimeoutSec 60
     $m   = $one.movie
-    Write-Host ("  id 1 -> rt_rating={0}  metacritic={1}  budget={2}  revenue={3}  trailer_key={4}" -f `
+    Write-Host ("  id {0} -> rt_rating={1}  metacritic={1}  budget={2}  revenue={3}  trailer_key={4}" -f `
         $m.rt_rating, $m.metacritic, $m.budget, $m.revenue, $m.trailer_key)
 } catch {
     Write-Host "  (check skipped: $($_.Exception.Message))" -ForegroundColor Yellow
