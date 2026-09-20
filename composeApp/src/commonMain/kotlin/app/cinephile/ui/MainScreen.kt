@@ -1884,17 +1884,8 @@ private fun BrowseFilterSheet(
                 .navigationBarsPadding()
                 .padding(24.dp),
         ) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .width(40.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(colors.border),
-            )
-
             Row(
-                Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 20.dp),
+                Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1919,6 +1910,25 @@ private fun BrowseFilterSheet(
                         countKey++
                     },
                 )
+                Spacer(Modifier.width(12.dp))
+                // Close affordance instead of a drag line: same chip language as
+                // the header buttons elsewhere in the app.
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(colors.muted)
+                        .border(1.dp, colors.border, CircleShape)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Close filters",
+                        tint = colors.foreground.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
 
             ExpandableFilterRow(
@@ -2005,6 +2015,9 @@ private fun BrowseFilterSheet(
                     )
                 }
             }
+
+            // Keeps the apply button clear of the phone's navigation buttons.
+            Spacer(Modifier.height(30.dp))
 
         }
     }
