@@ -259,35 +259,41 @@ fun BeamDetailScreen(
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     Spacer(Modifier.height(24.dp))
                     val topRow = 1 + (if (imdbRating != null) 1 else 0)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (topRow == 1) Arrangement.Center else Arrangement.spacedBy(12.dp),
+                    ) {
                         tmdbRating?.let { value ->
                             RatingCard(
                                 label = "TMDB", value = fmt1(value), star = true,
-                                modifier = if (topRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                                modifier = if (topRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
                             )
                         }
                         imdbRating?.let { value ->
                             RatingCard(
                                 label = "IMDb", value = fmt1(value), star = false,
-                                modifier = if (topRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                                modifier = if (topRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
                             )
                         }
                     }
                     if (rtRating != null || metacritic != null) {
                         val bottomRow = 1 + (if (metacritic != null) 1 else 0)
                         Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = if (bottomRow == 1) Arrangement.Center else Arrangement.spacedBy(12.dp),
+                        ) {
                             rtRating?.let { value ->
                                 RatingCard(
                                     label = "Rotten Tomatoes", value = value, star = false,
                                     tint = Color(0xFFEF4444),
-                                    modifier = if (bottomRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                                    modifier = if (bottomRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
                                 )
                             }
                             metacritic?.let { value ->
                                 RatingCard(
                                     label = "Metacritic", value = value.toString(), star = false,
-                                    modifier = if (bottomRow == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
+                                    modifier = if (bottomRow == 1) Modifier.width(160.dp) else Modifier.weight(1f),
                                 )
                             }
                         }
@@ -303,12 +309,15 @@ fun BeamDetailScreen(
             item {
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     Spacer(Modifier.height(24.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         budget?.let { value ->
-                            RatingCard("Budget", "$" + money(value), star = false, modifier = Modifier.weight(1f))
+                            RatingCard("Budget", "$" + money(value), star = false, compact = true, modifier = Modifier.weight(1f))
                         }
                         revenue?.let { value ->
-                            RatingCard("Revenue", "$" + money(value), star = false, modifier = Modifier.weight(1f))
+                            RatingCard("Revenue", "$" + money(value), star = false, compact = true, modifier = Modifier.weight(1f))
                         }
                         if (budget != null && revenue != null) {
                             val profit = revenue - budget
@@ -316,6 +325,7 @@ fun BeamDetailScreen(
                                 label = "Profit",
                                 value = (if (profit >= 0) "+$" else "-$") + money(if (profit >= 0) profit else -profit),
                                 star = false,
+                                compact = true,
                                 tint = if (profit >= 0) Color(0xFF10B981) else Color(0xFFEF4444),
                                 modifier = Modifier.weight(1f),
                             )
@@ -329,7 +339,14 @@ fun BeamDetailScreen(
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(24.dp))
-                TrackingCard(rating = myRating, onRating = { myRating = it })
+                TrackingCard(
+                    watched = watched,
+                    favorite = favorite,
+                    rating = myRating,
+                    onWatched = { watched = !watched },
+                    onFavorite = { favorite = !favorite },
+                    onRating = { myRating = it },
+                )
             }
         }
 
@@ -340,44 +357,40 @@ fun BeamDetailScreen(
                     Spacer(Modifier.height(24.dp))
                     SectionLabel("Cast")
                     Spacer(Modifier.height(12.dp))
-                    cast.take(10).chunked(3).forEach { rowCast ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            rowCast.forEach { person ->
-                                Column(
-                                    Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    AvatarCircle(person.profile_path, person.name, 56.dp)
-                                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(cast.take(10)) { person ->
+                            Column(
+                                modifier = Modifier.width(72.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                AvatarCircle(person.profile_path, person.name, 56.dp)
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = person.name,
+                                    color = colors.foreground,
+                                    fontFamily = GeistMono,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                )
+                                person.character?.takeIf { it.isNotBlank() }?.let { role ->
                                     Text(
-                                        text = person.name,
-                                        color = colors.foreground,
+                                        text = role,
+                                        color = colors.mutedForeground,
                                         fontFamily = GeistMono,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 2,
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center,
                                     )
-                                    person.character?.takeIf { it.isNotBlank() }?.let { role ->
-                                        Text(
-                                            text = role,
-                                            color = colors.mutedForeground,
-                                            fontFamily = GeistMono,
-                                            fontSize = 10.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            textAlign = TextAlign.Center,
-                                        )
-                                    }
                                 }
                             }
-                            repeat(3 - rowCast.size) { Spacer(Modifier.weight(1f)) }
                         }
-                        Spacer(Modifier.height(16.dp))
                     }
                 }
             }
@@ -701,11 +714,12 @@ private fun DetailButton(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     primary: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val colors = Beam.colors
     Row(
-        Modifier
+        modifier
             .clip(RoundedCornerShape(50))
             .background(if (primary) colors.amber500 else Color.Transparent)
             .border(1.dp, if (primary) Color.Transparent else colors.border, RoundedCornerShape(50))
@@ -780,6 +794,17 @@ private fun HeroCard(
                     )
                 } ?: Box(Modifier.fillMaxSize().background(colors.card))
 
+                // Status-bar legibility band, then the melt-into-page gradient.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0x99000000), Color(0x00000000)),
+                            ),
+                        ),
+                )
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -872,8 +897,8 @@ private fun HeroCard(
                         text = item.title,
                         color = colors.foreground,
                         fontFamily = Fraunces,
-                        fontSize = 24.sp,
-                        lineHeight = 29.sp,
+                        fontSize = 28.sp,
+                        lineHeight = 34.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = (-0.4).sp,
                     )
@@ -969,27 +994,30 @@ private fun HeroCard(
 
             // ---- one wrapping action row: three labelled primaries, then the
             // two tracking toggles as icon-only buttons ----
-            androidx.compose.foundation.layout.FlowRow(
-                modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 16.dp),
+            // Row 1: the four primaries, equal width.
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 DetailButton(
                     label = if (resolving) "Loading\u2026" else "Play",
                     icon = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
                     primary = true,
+                    modifier = Modifier.weight(1f),
                     onClick = onPlay,
                 )
                 DetailButton(
                     label = "My List",
                     icon = if (watchLater) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                     primary = false,
+                    modifier = Modifier.weight(1f),
                     onClick = onWatchLater,
                 )
                 DetailButton(
                     label = "Download",
                     icon = Icons.Filled.Download,
                     primary = false,
+                    modifier = Modifier.weight(1f),
                     onClick = onDownload,
                 )
                 if (trailer != null) {
@@ -997,11 +1025,19 @@ private fun HeroCard(
                         label = "Trailer",
                         icon = Icons.Filled.PlayArrow,
                         primary = false,
+                        modifier = Modifier.weight(1f),
                         onClick = onTrailer,
                     )
                 }
+            }
+
+            // Row 2: tracking toggles, icon-only.
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 IconToggleButton(
-                    icon = if (watched) Icons.Filled.CheckCircle else Icons.Filled.CheckCircle,
+                    icon = Icons.Filled.CheckCircle,
                     contentDescription = if (watched) "Watched" else "Mark watched",
                     active = watched,
                     onClick = onWatched,
@@ -1060,14 +1096,21 @@ private fun stampOf(positionMs: Long): String {
  * repeating them here was duplication, so this card does one job.
  */
 @Composable
-private fun TrackingCard(rating: Int, onRating: (Int) -> Unit) {
+private fun TrackingCard(
+    watched: Boolean,
+    favorite: Boolean,
+    rating: Int,
+    onWatched: () -> Unit,
+    onFavorite: () -> Unit,
+    onRating: (Int) -> Unit,
+) {
     val colors = Beam.colors
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(colors.card)
-            .border(1.dp, colors.amber500.copy(alpha = 0.20f), RoundedCornerShape(26.dp))
+            .border(1.dp, colors.amber500.copy(alpha = 0.20f), RoundedCornerShape(18.dp))
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1083,6 +1126,23 @@ private fun TrackingCard(rating: Int, onRating: (Int) -> Unit) {
                 fontFamily = Fraunces,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconToggleButton(
+                icon = Icons.Filled.CheckCircle,
+                contentDescription = if (watched) "Watched" else "Mark watched",
+                active = watched,
+                onClick = onWatched,
+            )
+            IconToggleButton(
+                icon = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                contentDescription = if (favorite) "Favorite" else "Add to favorites",
+                active = favorite,
+                onClick = onFavorite,
             )
         }
 
@@ -1124,7 +1184,7 @@ private fun TrackingCard(rating: Int, onRating: (Int) -> Unit) {
         )
     }
 }
-/** One ratings-grid cell: muted label above a bold value. */
+/** Compact data chip: 64dp for ratings, 56dp for box office (visual hierarchy). */
 @Composable
 private fun RatingCard(
     label: String,
@@ -1132,37 +1192,44 @@ private fun RatingCard(
     star: Boolean,
     modifier: Modifier = Modifier,
     tint: Color = Color.Unspecified,
+    compact: Boolean = false,
 ) {
     val colors = Beam.colors
+    val shape = RoundedCornerShape(if (compact) 10.dp else 12.dp)
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(26.dp))
+            .height(if (compact) 56.dp else 64.dp)
+            .clip(shape)
             .background(colors.card)
-            .border(1.dp, colors.border, RoundedCornerShape(26.dp))
-            .padding(12.dp),
+            .border(1.dp, colors.border, shape)
+            .padding(if (compact) 10.dp else 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = label,
+            text = label.uppercase(),
             color = colors.mutedForeground,
             fontFamily = GeistMono,
-            fontSize = 12.sp,
+            fontSize = 10.sp,
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (star) {
                 Icon(
                     imageVector = Icons.Filled.Star,
                     contentDescription = null,
                     tint = Color(0xFFF0B457),
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(if (compact) 14.dp else 16.dp),
                 )
             }
             Text(
                 text = value,
                 color = if (tint == Color.Unspecified) colors.foreground else tint,
                 fontFamily = GeistMono,
-                fontSize = 20.sp,
+                fontSize = if (compact) 16.sp else 20.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -1264,3 +1331,4 @@ private fun RailCard(
         }
     }
 }
+
