@@ -38,7 +38,13 @@ data class MediaItem(
 }
 
 @Serializable
-data class MediaPage(val page: Int = 1, val limit: Int = 20, val items: List<MediaItem> = emptyList())
+data class MediaPage(
+    val page: Int = 1,
+    val limit: Int = 20,
+    val items: List<MediaItem> = emptyList(),
+    /** Total rows matching the filters, when the worker provides it. */
+    val total: Int? = null,
+)
 
 @Serializable
 data class MediaList(val items: List<MediaItem> = emptyList())

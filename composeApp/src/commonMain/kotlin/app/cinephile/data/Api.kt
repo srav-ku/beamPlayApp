@@ -200,12 +200,16 @@ object Api {
         sort: String = "latest",
         genre: String? = null,
         year: String? = null,
+        yearFrom: String? = null,
+        yearTo: String? = null,
         language: String? = null,
         q: String? = null,
     ): MediaPage = client.get("$BASE/movies") {
         parameter("page", page); parameter("limit", limit); parameter("sort", sort)
         if (!genre.isNullOrBlank()) parameter("genre", genre)
         if (!year.isNullOrBlank()) parameter("year", year)
+        if (!yearFrom.isNullOrBlank()) parameter("year_from", yearFrom)
+        if (!yearTo.isNullOrBlank()) parameter("year_to", yearTo)
         if (!language.isNullOrBlank()) parameter("language", language)
         if (!q.isNullOrBlank()) parameter("q", q)
     }.body()
@@ -216,12 +220,16 @@ object Api {
         sort: String = "latest",
         genre: String? = null,
         year: String? = null,
+        yearFrom: String? = null,
+        yearTo: String? = null,
         language: String? = null,
         q: String? = null,
     ): MediaPage = client.get("$BASE/series") {
         parameter("page", page); parameter("limit", limit); parameter("sort", sort)
         if (!genre.isNullOrBlank()) parameter("genre", genre)
         if (!year.isNullOrBlank()) parameter("year", year)
+        if (!yearFrom.isNullOrBlank()) parameter("year_from", yearFrom)
+        if (!yearTo.isNullOrBlank()) parameter("year_to", yearTo)
         if (!language.isNullOrBlank()) parameter("language", language)
         if (!q.isNullOrBlank()) parameter("q", q)
     }.body()

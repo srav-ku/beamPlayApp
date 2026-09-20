@@ -104,13 +104,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import app.cinephile.core.ui.theme.PillShape
 import kotlin.math.roundToInt
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.RangeSliderState
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.snapshotFlow
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -1350,8 +1354,9 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
 
     var genre by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("") }
     var language by remember { mutableStateOf("") }
+    var yearStart by remember { mutableStateOf<Int?>(null) }
+    var yearEnd by remember { mutableStateOf<Int?>(null) }
     var options by remember { mutableStateOf(FilterOptionsUi()) }
     var showFilters by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf<List<Long>>(emptyList()) }
@@ -1360,21 +1365,32 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
     val colors = Beam.colors
     val gridState = rememberLazyGridState()
 
-    // Chip values come from the database, never hardcoded.
     LaunchedEffect(Unit) {
         runCatching { Api.getFilterOptions() }.getOrNull()?.let { f ->
             options = FilterOptionsUi(f.genres, f.years, f.languages)
         }
     }
 
+    // Single year goes through the exact-match parameter; a real range uses the
+    // two range parameters the worker gained alongside this screen.
+    val exactYear = if (yearStart != null && yearStart == yearEnd) yearStart.toString() else ""
+    val fromYear = if (yearStart != null && yearStart != yearEnd) yearStart.toString() else null
+    val toYear = if (yearEnd != null && yearStart != yearEnd) yearEnd.toString() else null
+
     suspend fun loadPage(target: Int, replace: Boolean) {
         if (replace) loading = true else loadingMore = true
         error = null
         try {
             val res = if (kind == "movies") {
-                Api.movies(page = target, limit = 30, genre = genre, year = year, language = language)
+                Api.movies(
+                    page = target, limit = 30, genre = genre, year = exactYear,
+                    yearFrom = fromYear, yearTo = toYear, language = language,
+                )
             } else {
-                Api.seriesList(page = target, limit = 30, genre = genre, year = year, language = language)
+                Api.seriesList(
+                    page = target, limit = 30, genre = genre, year = exactYear,
+                    yearFrom = fromYear, yearTo = toYear, language = language,
+                )
             }
             val incoming = res.items
             items = if (replace) {
@@ -1392,12 +1408,11 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
         }
     }
 
-    LaunchedEffect(kind, genre, year, language, retry) {
+    LaunchedEffect(kind, genre, language, exactYear, fromYear, toYear, retry) {
         if (retry > 0) kotlinx.coroutines.delay(200)
         loadPage(1, replace = true)
     }
 
-    // Infinite scroll: pull the next page a few rows early.
     LaunchedEffect(gridState) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
             .collect { last ->
@@ -1407,10 +1422,11 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
             }
     }
 
-    val activeCount = listOf(genre, year, language).count { it.isNotBlank() }
+    val rangeActive = yearStart != null && yearEnd != null && yearStart != yearEnd
+    val activeCount = listOf(genre.isNotBlank(), language.isNotBlank(), rangeActive || exactYear.isNotBlank())
+        .count { it }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        // ---- Row 1: page title + filter button ----
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1456,7 +1472,6 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
 
         Spacer(Modifier.height(16.dp))
 
-        // ---- Row 2: Movies / TV Shows segmented control ----
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Row(
                 Modifier
@@ -1565,22 +1580,26 @@ private fun BrowseTab(onOpenMedia: (MediaItem) -> Unit) {
 
     if (showFilters) {
         BrowseFilterSheet(
+            kind = kind,
             genres = options.genres,
-            years = options.years,
             languages = options.languages,
+            years = options.years,
             genre = genre,
-            year = year,
             language = language,
-            onApply = { g, y, l ->
+            yearStart = yearStart,
+            yearEnd = yearEnd,
+            onApply = { g, l, ys, ye ->
                 genre = g
-                year = y
                 language = l
+                yearStart = ys
+                yearEnd = ye
                 showFilters = false
             },
             onReset = {
                 genre = ""
-                year = ""
                 language = ""
+                yearStart = null
+                yearEnd = null
             },
             onDismiss = { showFilters = false },
         )
@@ -1665,71 +1684,146 @@ private fun BrowsePosterCard(
     }
 }
 
-/** Label + wrapping chips for one filter group. */
+
+/**
+ * One collapsible filter row: label left, current value + chevron right. Tapping
+ * expands an inline list instead of pushing a separate picker screen.
+ */
 @Composable
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-private fun FilterChipSection(
-    label: String,
-    options: List<Pair<String, String>>,
+private fun ExpandableFilterRow(
+    title: String,
     selected: String,
+    options: List<String>,
     onSelect: (String) -> Unit,
 ) {
     val colors = Beam.colors
-    Text(
-        text = label,
-        color = colors.mutedForeground,
-        fontFamily = GeistMono,
-        fontSize = 12.sp,
-        letterSpacing = 1.sp,
-    )
-    Spacer(Modifier.height(12.dp))
-    androidx.compose.foundation.layout.FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    var open by remember { mutableStateOf(false) }
+    val label = selected.ifBlank { "Any" }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.card)
+            .border(1.dp, colors.border, RoundedCornerShape(12.dp)),
     ) {
-        options.forEach { pair ->
-            val value = pair.first
-            val text = pair.second
-            val on = selected == value
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (on) colors.amber500 else Color.Transparent)
-                    .border(1.dp, if (on) Color.Transparent else colors.border, RoundedCornerShape(50))
-                    .clickable { onSelect(value) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    text = text,
-                    color = if (on) Color(0xFF101014) else Color.White,
-                    fontFamily = GeistMono,
-                    fontSize = 13.sp,
-                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                    maxLines = 1,
-                )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { open = !open }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, color = Color.White, fontFamily = GeistMono, fontSize = 14.sp)
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = label,
+                color = if (selected.isBlank()) colors.mutedForeground else colors.amber500,
+                fontFamily = GeistMono,
+                fontSize = 14.sp,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = colors.mutedForeground,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        if (open) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            Column(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                (listOf("" to "Any") + options.map { it to it }).forEach { pair ->
+                    val value = pair.first
+                    val text = pair.second
+                    val isSelected = selected == value
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(if (isSelected) colors.amber500.copy(alpha = 0.10f) else Color.Transparent)
+                            .clickable {
+                                onSelect(value)
+                                open = false
+                            }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = text,
+                            color = if (isSelected) colors.amber500 else Color.White,
+                            fontFamily = GeistMono,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-/** Bottom sheet with the three filter groups and a full-width apply button. */
+/**
+ * Filter sheet: two collapsible dropdowns and a year range slider - short enough
+ * to fit one screen, so there is no chip wall to scroll through.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun BrowseFilterSheet(
+    kind: String,
     genres: List<String>,
-    years: List<Int>,
     languages: List<String>,
+    years: List<Int>,
     genre: String,
-    year: String,
     language: String,
-    onApply: (String, String, String) -> Unit,
+    yearStart: Int?,
+    yearEnd: Int?,
+    onApply: (String, String, Int?, Int?) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = Beam.colors
     var g by remember { mutableStateOf(genre) }
-    var y by remember { mutableStateOf(year) }
     var l by remember { mutableStateOf(language) }
-    val scroll = androidx.compose.foundation.rememberScrollState()
+
+    // Slider bounds come from the catalogue, with a sane fallback.
+    val lo = (years.minOrNull() ?: 1988).toFloat()
+    val hi = (years.maxOrNull() ?: 2026).toFloat()
+    val sliderState = remember {
+        androidx.compose.material3.RangeSliderState(
+            activeRangeStart = (yearStart ?: lo.toInt()).toFloat(),
+            activeRangeEnd = (yearEnd ?: hi.toInt()).toFloat(),
+            valueRange = lo..hi,
+        )
+    }
+
+    var count by remember { mutableStateOf<Int?>(null) }
+    var countKey by remember { mutableStateOf(0) }
+
+    // Live "Show N Results": one cheap paged call reads the new `total` field.
+    LaunchedEffect(sliderState.activeRangeStart, sliderState.activeRangeEnd, g, l, countKey) {
+        kotlinx.coroutines.delay(250)
+        val start = sliderState.activeRangeStart.toInt()
+        val end = sliderState.activeRangeEnd.toInt()
+        val exact = if (start == end) start.toString() else ""
+        count = runCatching {
+            if (kind == "movies") {
+                Api.movies(
+                    page = 1, limit = 1, genre = g, year = exact, language = l,
+                    yearFrom = if (start != end) start.toString() else null,
+                    yearTo = if (start != end) end.toString() else null,
+                ).total
+            } else {
+                Api.seriesList(
+                    page = 1, limit = 1, genre = g, year = exact, language = l,
+                    yearFrom = if (start != end) start.toString() else null,
+                    yearTo = if (start != end) end.toString() else null,
+                ).total
+            }
+        }.getOrNull()
+    }
 
     PlatformBackHandler(enabled = true) { onDismiss() }
 
@@ -1759,9 +1853,10 @@ private fun BrowseFilterSheet(
                     .background(colors.border),
             )
 
-            Spacer(Modifier.height(16.dp))
-
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = "Filters",
                     color = Color.White,
@@ -1777,61 +1872,101 @@ private fun BrowseFilterSheet(
                     fontSize = 14.sp,
                     modifier = Modifier.clickable {
                         g = ""
-                        y = ""
                         l = ""
+                        sliderState.activeRangeStart = lo
+                        sliderState.activeRangeEnd = hi
                         onReset()
+                        countKey++
                     },
                 )
             }
 
-            Spacer(Modifier.height(20.dp))
+            ExpandableFilterRow(
+                title = "Genre",
+                selected = g,
+                options = genres,
+                onSelect = { g = it },
+            )
 
-            Column(Modifier.heightIn(max = 380.dp).verticalScroll(scroll)) {
-                FilterChipSection(
-                    label = "GENRE",
-                    options = listOf("" to "Any") + genres.map { it to it },
-                    selected = g,
-                    onSelect = { g = it },
-                )
-                Spacer(Modifier.height(20.dp))
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
-                Spacer(Modifier.height(20.dp))
-                FilterChipSection(
-                    label = "YEAR",
-                    options = listOf("" to "Any") + years.map { it.toString() to it.toString() },
-                    selected = y,
-                    onSelect = { y = it },
-                )
-                Spacer(Modifier.height(20.dp))
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
-                Spacer(Modifier.height(20.dp))
-                FilterChipSection(
-                    label = "LANGUAGE",
-                    options = listOf("" to "Any") + languages.map { it to it },
-                    selected = l,
-                    onSelect = { l = it },
-                )
-            }
+            Spacer(Modifier.height(12.dp))
 
-            Spacer(Modifier.height(20.dp))
+            ExpandableFilterRow(
+                title = "Language",
+                selected = l,
+                options = languages,
+                onSelect = { l = it },
+            )
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(colors.amber500)
-                    .clickable { onApply(g, y, l) },
-                contentAlignment = Alignment.Center,
-            ) {
+            Spacer(Modifier.height(24.dp))
+
+            Text(
+                text = "YEAR",
+                color = colors.mutedForeground,
+                fontFamily = GeistMono,
+                fontSize = 12.sp,
+                letterSpacing = 1.sp,
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    text = "Show Results",
-                    color = Color(0xFF101014),
+                    text = sliderState.activeRangeStart.toInt().toString(),
+                    color = Color.White,
                     fontFamily = GeistMono,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                )
+                Text(
+                    text = sliderState.activeRangeEnd.toInt().toString(),
+                    color = Color.White,
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
                 )
             }
+
+            androidx.compose.material3.RangeSlider(
+                state = sliderState,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = colors.amber500,
+                    activeTrackColor = colors.amber500,
+                    inactiveTrackColor = colors.border,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                Box(
+                    Modifier
+                        .width(220.dp)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(colors.amber500)
+                        .clickable {
+                            val s = sliderState.activeRangeStart.toInt()
+                            val e = sliderState.activeRangeEnd.toInt()
+                            onApply(
+                                g,
+                                l,
+                                if (s > lo.toInt()) s else null,
+                                if (e < hi.toInt()) e else null,
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = count?.let { "Show $it Results" } ?: "Show Results",
+                        color = Color(0xFF101014),
+                        fontFamily = GeistMono,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
