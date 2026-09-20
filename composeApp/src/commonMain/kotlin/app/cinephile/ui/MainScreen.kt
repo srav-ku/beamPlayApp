@@ -366,6 +366,7 @@ private fun HomeTab(
     var discovery by remember { mutableStateOf("Trending") }
     var kind by remember { mutableStateOf("Movies") }
     var pickTick by remember { mutableStateOf(0) }
+    var showAllContinue by remember { mutableStateOf(false) }
     // Session-scoped Watch Later: real behaviour, no backend needed yet.
     var watchLater by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
@@ -457,18 +458,19 @@ private fun HomeTab(
 
             else -> {
 
-                // ---- 1. Continue Watching (this app's "My Collections" slot) ----
-                item {
-                    HomeSection(title = "Continue Watching") {
-                        if (resumeItems.isEmpty()) {
-                            EmptyStateCard(
-                                icon = "\u25B6",
-                                title = "Nothing in progress yet",
-                                body = "Start any title and it will show up here, exactly where you left it.",
-                                cta = "Find something to watch",
-                                onCta = onOpenSearch,
-                            )
-                        } else {
+                // ---- 1. Continue Watching. Rendered only when something is in
+                // progress: finishing a title removes it on its own, so there is
+                // never an empty state to show here.
+                if (resumeItems.isNotEmpty()) {
+                    item {
+                        HomeSection(
+                            title = "Continue Watching",
+                            action = if (resumeItems.size > 4) {
+                                { PillButton("View all", primary = false) { showAllContinue = true } }
+                            } else {
+                                null
+                            },
+                        ) {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -630,6 +632,19 @@ private fun HomeTab(
                         }
                     }
                 }
+            }
+        }
+
+        // Full-screen list of everything in progress (reached via "View all").
+        item {
+            if (showAllContinue) {
+                ContinueWatchingAllScreen(
+                    items = resumeItems,
+                    onPick = { ci -> showAllContinue = false; onResumeContinue(ci) },
+                    onRemove = { ci -> removeContinueWatching(ci.sourceUrl); railTick++ },
+                    onWatched = { ci -> markContinueWatchingWatched(ci.sourceUrl, ci.title, ci.durationMs); railTick++ },
+                    onClose = { showAllContinue = false },
+                )
             }
         }
     }
@@ -2257,6 +2272,93 @@ private fun ProfileTab(subtitleSettings: @Composable () -> Unit) {
                     )
                     Spacer(Modifier.width(14.dp))
                     Text("Settings", color = Color(0xFFEDEDED), fontSize = 15.sp)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Full-screen "Continue Watching" list: everything in progress, picked from here.
+ * A Dialog is used so it sits above the floating navigation bar, and the system
+ * back gesture closes it.
+ */
+@Composable
+private fun ContinueWatchingAllScreen(
+    items: List<ContinueItem>,
+    onPick: (ContinueItem) -> Unit,
+    onRemove: (ContinueItem) -> Unit,
+    onWatched: (ContinueItem) -> Unit,
+    onClose: () -> Unit,
+) {
+    val colors = Beam.colors
+    Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(colors.background)
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Continue Watching",
+                    color = colors.foreground,
+                    fontFamily = Fraunces,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(colors.muted)
+                        .border(1.dp, colors.border, CircleShape)
+                        .clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Close",
+                        tint = colors.foreground.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+
+            if (items.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Nothing in progress.",
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 13.sp,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    itemsIndexed(
+                        items = items,
+                        key = { idx, ci -> "cwall_" + ci.sourceUrl + "_" + idx },
+                    ) { _, ci ->
+                        ContinueWatchingResumeCard(
+                            item = ci,
+                            onClick = { onPick(ci) },
+                            onRemove = { onRemove(ci) },
+                            onWatched = { onWatched(ci) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
