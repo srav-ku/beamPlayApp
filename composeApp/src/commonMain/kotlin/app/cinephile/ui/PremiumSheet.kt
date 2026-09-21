@@ -1,197 +1,243 @@
 package app.cinephile.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.cinephile.core.model.PlanInfo
+import app.cinephile.core.ui.theme.Beam
+import app.cinephile.core.ui.theme.Fraunces
 import app.cinephile.core.ui.theme.GeistMono
 import app.cinephile.data.EntitlementsState
+import androidx.compose.foundation.layout.fillMaxSize
 
 /**
- * Premium sheet, shown instead of the source picker when streaming is gated.
+ * The paywall. One job: make the offer obvious and the next step obvious.
  *
- * Benefit copy and prices come from the server (`features` / `plans`), so the paywall
- * can be reworded or repriced without shipping a new APK. The free plan is filtered out
- * here on purpose: showing "Free" on a paywall is a reason not to pay.
+ * Structure follows the app's own sheet language - card surface, top-corner
+ * radius, a standalone close chip, amber primary - with the benefits condensed
+ * into one card of three short rows instead of a paragraph each, and the
+ * activation instructions folded into a single line under the button.
  */
-private data class Benefit(val name: String, val description: String, val icon: ImageVector)
-
-private val FallbackBenefits = listOf(
-    Benefit("Stream instantly", "Every movie and series, in your browser. Subtitles, audio choices, no waiting.", Icons.Filled.PlayArrow),
-    Benefit("Full-speed downloads", "Direct downloads at the fastest speed your connection can take.", Icons.Filled.FileDownload),
-    Benefit("Zero ads", "Nothing between you and the film. Anywhere, on any device.", Icons.Filled.Block),
-)
-
-private fun iconFor(key: String?): ImageVector = when (key) {
-    "stream_instant" -> Icons.Filled.PlayArrow
-    "download_full_speed" -> Icons.Filled.FileDownload
-    "no_ads" -> Icons.Filled.Block
-    else -> Icons.Filled.PlayArrow
-}
-
 @Composable
 fun PremiumSheet(onDismiss: () -> Unit) {
+    val colors = Beam.colors
     val state = EntitlementsState.current
-    val benefits = state?.benefits?.takeIf { it.isNotEmpty() }
-        ?.map { Benefit(it.name, it.description.orEmpty(), iconFor(it.key)) }
-        ?: FallbackBenefits
-    // Paid durations only - never show the free tier on a paywall.
     val plans = state?.plans.orEmpty().filter { it.priceCents > 0 }.sortedBy { it.priceCents }
+    var selected by remember { mutableStateOf(plans.firstOrNull { it.isFeatured == 1 } ?: plans.firstOrNull()) }
+    var showSteps by remember { mutableStateOf(false) }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color(0xCC000000))
-            .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.BottomCenter,
-    ) {
+    PlatformBackHandler(enabled = true) { onDismiss() }
+
+    Box(Modifier.fillMaxSize()) {
+        // Scrim
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable(onClick = onDismiss),
+        )
+
         Column(
             Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .heightIn(max = 700.dp)
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-                .background(Color(0xFF141418))
-                .clickable(enabled = false) {}
+                .background(colors.card)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                ) {}
                 .navigationBarsPadding()
-                .padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 28.dp),
+                .padding(24.dp),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("BeamBot Premium", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        "Streaming is a premium feature. Downloads through Telegram stay free.",
-                        color = Color(0xFF8F8F9A),
-                        fontSize = 12.5.sp,
-                    )
-                }
+            Box(Modifier.fillMaxWidth()) {
+                // Standalone close chip, its own corner rather than floating in copy.
                 Box(
                     Modifier
+                        .align(Alignment.TopEnd)
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0x14FFFFFF))
+                        .background(Color.Black.copy(alpha = 0.3f))
                         .clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Close, "Close", tint = Color(0xFFAAAAAA), modifier = Modifier.size(15.dp))
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                 }
-            }
 
-            Spacer(Modifier.height(18.dp))
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(8.dp))
+                    Icon(PremiumCrown, contentDescription = null, tint = colors.amber500, modifier = Modifier.size(46.dp))
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = "Cinephile Premium",
+                        color = colors.foreground,
+                        fontFamily = Fraunces,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Stream. Download. Ad-free.",
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(24.dp))
 
-            benefits.forEach { benefit ->
-                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.Top) {
+                    // One benefits card, three short rows, hairline dividers.
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(colors.card)
+                            .border(1.dp, colors.border, RoundedCornerShape(18.dp)),
+                    ) {
+                        BenefitRow(Icons.Filled.PlayArrow, "Stream instantly", "No waiting, no buffering")
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                        BenefitRow(Icons.Filled.Download, "Full-speed downloads", "Fastest speed your connection allows")
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                        BenefitRow(Icons.Filled.Block, "Zero ads", "Nothing between you and the film")
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // Prices come from the server; pick one, then upgrade.
+                    if (plans.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            plans.forEach { plan ->
+                                PlanChip(
+                                    plan = plan,
+                                    selected = selected?.id == plan.id,
+                                    onClick = { selected = plan },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(20.dp))
+                    }
+
                     Box(
                         Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0x21F5A623)),
+                            .width(220.dp)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(colors.amber500)
+                            .clickable { showSteps = true },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(benefit.icon, null, tint = Color(0xFFF5A623), modifier = Modifier.size(19.dp))
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(benefit.name, color = Color.White, fontSize = 14.5.sp, fontWeight = FontWeight.Medium)
-                        if (benefit.description.isNotBlank()) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(benefit.description, color = Color(0xFF8F8F9A), fontSize = 12.5.sp)
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            plans.forEach { plan ->
-                val featured = plan.isFeatured == 1
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(if (featured) Color(0x14F5A623) else Color(0xFF1B1B21))
-                        .padding(16.dp),
-                ) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(plan.name, color = Color.White, fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
-                                if (featured) {
-                                    Spacer(Modifier.width(8.dp))
-                                    Box(
-                                        Modifier
-                                            .clip(RoundedCornerShape(999.dp))
-                                            .background(Color(0xFFF5A623))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    ) {
-                                        Text("BEST VALUE", color = Color(0xFF101014), fontSize = 9.5.sp, fontFamily = GeistMono)
-                                    }
-                                }
-                            }
-                            plan.tagline?.takeIf { it.isNotBlank() }?.let {
-                                Spacer(Modifier.height(3.dp))
-                                Text(it, color = Color(0xFF8F8F9A), fontSize = 12.5.sp)
-                            }
-                        }
                         Text(
-                            text = "${plan.currency} ${plan.priceMajor}",
-                            color = if (featured) Color(0xFFF5A623) else Color(0xFFEDEDED),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            text = "Upgrade to Premium",
+                            color = Color(0xFF101014),
+                            fontFamily = GeistMono,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = if (showSteps && selected != null) {
+                            "Pay " + selected!!.currency + " " + selected!!.priceMajor + " externally, then activate in Profile \u2192 Plans."
+                        } else {
+                            "Pay externally, activate in Profile \u2192 Plans"
+                        },
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 15.sp,
+                    )
                 }
             }
-
-            Spacer(Modifier.height(6.dp))
-
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF1B1B21))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Text("HOW TO ACTIVATE", color = Color(0xFF8F8F9A), fontSize = 10.5.sp, fontFamily = GeistMono)
-                Text("1.  Pay on the support page - it opens outside the app.", color = Color(0xFFD7D7DD), fontSize = 12.5.sp)
-                Text("2.  Come back here and open Profile \u2192 Plans.", color = Color(0xFFD7D7DD), fontSize = 12.5.sp)
-                Text("3.  Enter the reference or email you paid with.", color = Color(0xFFD7D7DD), fontSize = 12.5.sp)
-                Spacer(Modifier.height(2.dp))
-                Text("Nothing is charged inside the app.", color = Color(0xFF8F8F9A), fontSize = 11.5.sp)
-            }
         }
+    }
+}
+
+@Composable
+private fun BenefitRow(icon: ImageVector, title: String, subtitle: String) {
+    val colors = Beam.colors
+    Row(
+        Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.amber500.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.amber500, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(title, color = colors.foreground, fontFamily = GeistMono, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+    }
+}
+
+@Composable
+private fun PlanChip(plan: PlanInfo, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = Beam.colors
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) colors.amber500.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (selected) colors.amber500.copy(alpha = 0.65f) else colors.border, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (plan.isFeatured == 1) {
+            Text("BEST VALUE", color = colors.amber500, fontFamily = GeistMono, fontSize = 8.sp, letterSpacing = 0.5.sp)
+            Spacer(Modifier.height(2.dp))
+        }
+        Text(plan.name, color = colors.foreground, fontFamily = GeistMono, fontSize = 11.sp, maxLines = 1, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "\u20B9" + plan.priceMajor,
+            color = if (selected) colors.amber500 else colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
