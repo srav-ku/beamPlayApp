@@ -1453,7 +1453,8 @@ private fun BrowseTab(
     var yearEnd by remember { mutableStateOf<Int?>(null) }
     var options by remember { mutableStateOf(FilterOptionsUi()) }
     var showFilters by remember { mutableStateOf(false) }
-    var saved by remember { mutableStateOf<List<Long>>(emptyList()) }
+    // Bookmarks are Watch Later, straight from the collections store.
+    LaunchedEffect(Unit) { CollectionsRepo.ensureLoaded() }
     var retry by remember { mutableStateOf(0) }
 
     val colors = Beam.colors
@@ -1676,9 +1677,14 @@ private fun BrowseTab(
                 ) { item ->
                     BrowsePosterCard(
                         item = item,
-                        saved = saved.contains(item.id),
+                        saved = CollectionsRepo.inWatchLater(item.tmdb_id ?: item.id),
                         onToggleSave = {
-                            saved = if (saved.contains(item.id)) saved - item.id else saved + item.id
+                            CollectionsRepo.toggleWatchLater(
+                                CollectionsRepo.entryFrom(
+                                    tmdbId = item.tmdb_id, mediaId = item.id, title = item.title,
+                                    posterPath = item.poster_path, year = item.year, type = item.type,
+                                ),
+                            )
                         },
                         onClick = { onOpenMedia(item) },
                     )
