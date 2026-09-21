@@ -1,5 +1,6 @@
 package app.cinephile.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -31,16 +33,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,12 +50,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -68,7 +78,10 @@ import app.cinephile.data.CollectionsRepo
 import app.cinephile.data.MediaItem
 import coil3.compose.AsyncImage
 
-/** Small pill button used across the collections screens. */
+/* ------------------------------------------------------------------------- */
+/* Building blocks                                                            */
+/* ------------------------------------------------------------------------- */
+
 @Composable
 private fun CollPill(
     label: String,
@@ -87,7 +100,11 @@ private fun CollPill(
     ) {
         Text(
             text = label,
-            color = if (primary) Color(0xFF101014) else colors.foreground,
+            color = when {
+                !enabled -> colors.mutedForeground
+                primary -> Color(0xFF101014)
+                else -> colors.foreground
+            },
             fontFamily = GeistMono,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
@@ -97,11 +114,11 @@ private fun CollPill(
 }
 
 @Composable
-private fun CircleChip(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+private fun CircleChip(icon: ImageVector, description: String, onClick: () -> Unit) {
     val colors = Beam.colors
     Box(
         Modifier
-            .size(32.dp)
+            .size(34.dp)
             .clip(CircleShape)
             .background(colors.muted)
             .border(1.dp, colors.border, CircleShape)
@@ -112,54 +129,167 @@ private fun CircleChip(icon: androidx.compose.ui.graphics.vector.ImageVector, de
     }
 }
 
-/** 2x2 poster mosaic used as a collection cover, like the reference lists. */
+/**
+ * The library glyph from the design reference: four bars of rising length,
+ * drawn by hand so it matches exactly rather than approximating an icon pack.
+ */
 @Composable
-private fun CollectionCover(collection: CineCollection, modifier: Modifier = Modifier) {
+private fun LibraryGlyph(size: Dp, tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val unit = this.size.minDimension / 24f
+        val stroke = 2f * unit
+        // "m16 6 4 14" - the slanting bar
+        drawLine(
+            color = tint,
+            start = Offset(x = 16f * unit, y = 6f * unit),
+            end = Offset(x = 20f * unit, y = 20f * unit),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+        drawLine(tint, Offset(12f * unit, 6f * unit), Offset(12f * unit, 20f * unit), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(8f * unit, 8f * unit), Offset(8f * unit, 20f * unit), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(4f * unit, 4f * unit), Offset(4f * unit, 20f * unit), stroke, StrokeCap.Round)
+    }
+}
+
+/** Dashed placeholder used when a list has nothing in it yet. */
+@Composable
+private fun EmptyListBox(message: String, modifier: Modifier = Modifier) {
     val colors = Beam.colors
-    Box(modifier.clip(RoundedCornerShape(18.dp)).background(colors.muted)) {
-        if (collection.items.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "Empty",
-                    color = colors.mutedForeground,
-                    fontFamily = GeistMono,
-                    fontSize = 12.sp,
+    val dash = remember { PathEffect.dashPathEffect(floatArrayOf(16f, 14f), 0f) }
+    Box(
+        modifier
+            .clip(RoundedCornerShape(22.dp))
+            .drawBehind {
+                drawRoundRect(
+                    color = colors.border,
+                    cornerRadius = CornerRadius(22.dp.toPx(), 22.dp.toPx()),
+                    style = Stroke(width = 2f, pathEffect = dash),
                 )
             }
-        } else {
-            Column(Modifier.fillMaxSize()) {
-                for (row in 0 until 2) {
-                    Row(Modifier.weight(1f)) {
-                        for (col in 0 until 2) {
-                            val item = collection.items.getOrNull(row * 2 + col)
-                            Box(Modifier.weight(1f).fillMaxHeight().background(colors.card)) {
-                                Api.backdropUrl(item?.posterPath, "w342")?.let { url ->
-                                    AsyncImage(
-                                        model = url,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            .padding(14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color(0x00000000), Color(0x99000000)),
-                        ),
-                    ),
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(colors.amber500.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                LibraryGlyph(size = 22.dp, tint = colors.amber500.copy(alpha = 0.65f))
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = message,
+                color = colors.mutedForeground,
+                fontFamily = GeistMono,
+                fontSize = 10.sp,
+                lineHeight = 13.sp,
+                textAlign = TextAlign.Center,
             )
         }
     }
 }
 
-/** Library tab: every collection, with covers, counts and progress. */
+/** Mosaic cover, or the dashed empty state when the list holds nothing. */
+@Composable
+private fun CollectionCover(collection: CineCollection, modifier: Modifier = Modifier) {
+    val colors = Beam.colors
+    if (collection.items.isEmpty()) {
+        EmptyListBox(
+            message = "This list is empty. Search for movies to add them.",
+            modifier = modifier,
+        )
+        return
+    }
+    Box(modifier.clip(RoundedCornerShape(18.dp)).background(colors.muted)) {
+        Column(Modifier.fillMaxSize()) {
+            for (row in 0 until 2) {
+                Row(Modifier.weight(1f)) {
+                    for (col in 0 until 2) {
+                        val item = collection.items.getOrNull(row * 2 + col)
+                        Box(Modifier.weight(1f).fillMaxHeight().background(colors.card)) {
+                            Api.backdropUrl(item?.posterPath, "w342")?.let { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color(0x00000000), Color(0x99000000)))),
+        )
+    }
+}
+
+/** Horizontal switcher: a pill container with one amber segment. */
+@Composable
+private fun SegmentedChips(
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    scrollable: Boolean = false,
+) {
+    val colors = Beam.colors
+    val container: @Composable () -> Unit = {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(colors.card)
+                .border(1.dp, colors.border, RoundedCornerShape(50))
+                .padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            options.forEach { option ->
+                val on = option == selected
+                Box(
+                    Modifier
+                        .height(30.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (on) colors.amber500 else Color.Transparent)
+                        .clickable { onSelect(option) }
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = option,
+                        color = if (on) Color(0xFF101014) else colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 11.sp,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+    if (scrollable) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item { container() }
+        }
+    } else {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { container() }
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+/* Library: the grid of collections                                           */
+/* ------------------------------------------------------------------------- */
+
 @Composable
 fun CollectionsScreen(onOpenMedia: (MediaItem) -> Unit) {
     val colors = Beam.colors
@@ -189,62 +319,68 @@ fun CollectionsScreen(onOpenMedia: (MediaItem) -> Unit) {
             CollPill(label = "+ New List", primary = false) { showNew = true }
         }
 
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(collections, key = { it.id }) { collection ->
+            gridItems(collections, key = { it.id }) { collection ->
                 val watched = CollectionsRepo.watchedCount(collection)
                 val total = collection.items.size
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
+                        .clip(RoundedCornerShape(22.dp))
                         .background(colors.card)
-                        .border(1.dp, colors.border, RoundedCornerShape(26.dp))
+                        .border(1.dp, colors.border, RoundedCornerShape(22.dp))
                         .clickable { openId = collection.id }
-                        .padding(10.dp),
+                        .padding(8.dp),
                 ) {
                     CollectionCover(
                         collection = collection,
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
+                        modifier = Modifier.fillMaxWidth().height(118.dp),
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (collection.pinned) {
+                            Icon(Icons.Filled.Star, contentDescription = "Pinned", tint = colors.amber500, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
                         Text(
                             text = collection.name,
                             color = colors.foreground,
                             fontFamily = GeistMono,
-                            fontSize = 15.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
                         )
-                        if (collection.pinned) {
-                            Spacer(Modifier.width(6.dp))
-                            Icon(Icons.Filled.Star, contentDescription = "Pinned", tint = colors.amber500, modifier = Modifier.size(13.dp))
-                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (total == 0) "Empty" else "$total item" + (if (total == 1) "" else "s"),
+                            color = colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
                         if (collection.isDefault) {
                             Spacer(Modifier.width(6.dp))
                             Box(
                                 Modifier
                                     .clip(RoundedCornerShape(50))
                                     .background(colors.muted)
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    .padding(horizontal = 6.dp, vertical = 1.dp),
                             ) {
-                                Text("Default", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 10.sp)
+                                Text("Default", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 9.sp)
                             }
                         }
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            text = if (total == 0) "Empty" else "$total item" + (if (total == 1) "" else "s"),
-                            color = colors.mutedForeground,
-                            fontFamily = GeistMono,
-                            fontSize = 12.sp,
-                        )
                     }
                     if (total > 0) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         Box(
                             Modifier
                                 .fillMaxWidth()
@@ -254,17 +390,17 @@ fun CollectionsScreen(onOpenMedia: (MediaItem) -> Unit) {
                         ) {
                             Box(
                                 Modifier
-                                    .fillMaxWidth(if (total > 0) watched.toFloat() / total.toFloat() else 0f)
+                                    .fillMaxWidth(watched.toFloat() / total.toFloat())
                                     .fillMaxHeight()
                                     .background(colors.amber500),
                             )
                         }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(3.dp))
                         Text(
-                            text = "$watched of $total watched",
+                            text = "$watched/$total watched",
                             color = colors.mutedForeground,
                             fontFamily = GeistMono,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                         )
                     }
                 }
@@ -305,11 +441,7 @@ fun CollectionsScreen(onOpenMedia: (MediaItem) -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CollPill(label = "Cancel", primary = false) { showNew = false; newName = "" }
-                        CollPill(
-                            label = "Create",
-                            primary = true,
-                            enabled = newName.isNotBlank(),
-                        ) {
+                        CollPill(label = "Create", primary = true, enabled = newName.isNotBlank()) {
                             CollectionsRepo.create(newName)
                             newName = ""
                             showNew = false
@@ -329,7 +461,10 @@ fun CollectionsScreen(onOpenMedia: (MediaItem) -> Unit) {
     }
 }
 
-/** Everything inside one collection: view toggle, sort, search, remove, manage. */
+/* ------------------------------------------------------------------------- */
+/* One collection                                                             */
+/* ------------------------------------------------------------------------- */
+
 @Composable
 private fun CollectionDetailScreen(
     collection: CineCollection,
@@ -340,29 +475,31 @@ private fun CollectionDetailScreen(
     val fresh = CollectionsRepo.byId(collection.id) ?: collection
 
     var query by remember { mutableStateOf("") }
-    var sort by remember { mutableStateOf("Added") }
-    var grid by remember { mutableStateOf(true) }
+    var sort by remember { mutableStateOf("Custom order") }
+    var filter by remember { mutableStateOf("All") }
+    var view by remember { mutableStateOf("Grid") }
     var renaming by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf(fresh.name) }
 
-    val items = remember(fresh, query, sort) {
-        val filtered = if (query.isBlank()) fresh.items
-        else fresh.items.filter { it.title.contains(query, ignoreCase = true) }
+    val items = remember(fresh, query, sort, filter) {
+        var working = fresh.items
+        if (query.isNotBlank()) working = working.filter { it.title.contains(query, ignoreCase = true) }
+        working = when (filter) {
+            "Watched" -> working.filter { it.watched }
+            "Not watched" -> working.filterNot { it.watched }
+            else -> working
+        }
         when (sort) {
-            "Year" -> filtered.sortedByDescending { it.year ?: 0 }
-            "Title" -> filtered.sortedBy { it.title.lowercase() }
-            "Watched" -> filtered.sortedByDescending { it.watched }
-            else -> filtered.sortedByDescending { it.addedAt }
+            "Year" -> working.sortedByDescending { it.year ?: 0 }
+            "Title" -> working.sortedBy { it.title.lowercase() }
+            else -> working
         }
     }
 
     PlatformBackHandler(enabled = true) { onBack() }
 
-    Dialog(
-        onDismissRequest = onBack,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -371,76 +508,80 @@ private fun CollectionDetailScreen(
                 .navigationBarsPadding(),
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = fresh.name,
-                    color = colors.foreground,
-                    fontFamily = Fraunces,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (fresh.pinned) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.Filled.Star, contentDescription = "Pinned", tint = colors.amber500, modifier = Modifier.size(15.dp))
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(colors.amber500.copy(alpha = 0.10f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LibraryGlyph(size = 22.dp, tint = colors.amber500.copy(alpha = 0.65f))
                 }
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = fresh.name,
+                            color = colors.foreground,
+                            fontFamily = Fraunces,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (fresh.pinned) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(Icons.Filled.Star, contentDescription = "Pinned", tint = colors.amber500, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    Text(
+                        text = fresh.items.size.toString() + " item" + (if (fresh.items.size == 1) "" else "s"),
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 12.sp,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
                 CircleChip(Icons.Filled.Close, "Close") { onBack() }
             }
-
-            Text(
-                text = fresh.items.size.toString() + " item" + (if (fresh.items.size == 1) "" else "s"),
-                color = colors.mutedForeground,
-                fontFamily = GeistMono,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 16.dp, top = 2.dp),
-            )
-
-            Spacer(Modifier.height(12.dp))
 
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { CollPill(label = if (fresh.pinned) "Unpin" else "Pin", primary = false) { CollectionsRepo.setPinned(fresh.id, !fresh.pinned) } }
-                item { CollPill(label = "Rename", primary = false) { draftName = fresh.name; renaming = true } }
-                item { CollPill(label = if (grid) "List view" else "Grid view", primary = false) { grid = !grid } }
+                // Defaults stay as they are: their names are part of the app.
                 if (!fresh.isDefault) {
+                    item { CollPill(label = "Rename", primary = false) { draftName = fresh.name; renaming = true } }
                     item { CollPill(label = "Delete", primary = false) { showDelete = true } }
                 }
             }
 
+            Spacer(Modifier.height(14.dp))
+
+            SegmentedChips(options = listOf("Grid", "List"), selected = view, onSelect = { view = it })
+
             Spacer(Modifier.height(10.dp))
 
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                listOf("Added", "Year", "Title", "Watched").forEach { option ->
-                    val on = sort == option
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(if (on) colors.amber500 else Color.Transparent)
-                            .border(1.dp, if (on) Color.Transparent else colors.border, RoundedCornerShape(50))
-                            .clickable { sort = option }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            text = option,
-                            color = if (on) Color(0xFF101014) else colors.mutedForeground,
-                            fontFamily = GeistMono,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
+            SegmentedChips(
+                options = listOf("Custom order", "Year", "Title"),
+                selected = sort,
+                onSelect = { sort = it },
+                scrollable = true,
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            SegmentedChips(
+                options = listOf("All", "Watched", "Not watched"),
+                selected = filter,
+                onSelect = { filter = it },
+                scrollable = true,
+            )
 
             Spacer(Modifier.height(10.dp))
 
@@ -463,21 +604,23 @@ private fun CollectionDetailScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            if (items.isEmpty()) {
+            if (fresh.items.isEmpty()) {
+                Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    EmptyListBox(
+                        message = "This list is empty. Search for movies to add them.",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            } else if (items.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = if (fresh.items.isEmpty()) {
-                            "Nothing saved here yet.\nUse the bookmark on any card, or Add to List on a title."
-                        } else {
-                            "No matches in this list."
-                        },
+                        text = "No matches with these filters.",
                         color = colors.mutedForeground,
                         fontFamily = GeistMono,
                         fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
                     )
                 }
-            } else if (grid) {
+            } else if (view == "Grid") {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
@@ -591,10 +734,26 @@ private fun CollectionDetailScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(item.year?.toString() ?: "—", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 11.sp)
+                                    Text(item.year?.toString() ?: "\u2014", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 11.sp)
                                     Text(item.type?.uppercase() ?: "", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 11.sp)
                                     if (item.watched) {
                                         Text("WATCHED", color = colors.amber500, fontFamily = GeistMono, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                            if (sort == "Custom order") {
+                                Column {
+                                    Box(
+                                        Modifier.size(26.dp).clickable { CollectionsRepo.moveItem(fresh.id, item.tmdbId, -1) },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up", tint = colors.mutedForeground, modifier = Modifier.size(18.dp))
+                                    }
+                                    Box(
+                                        Modifier.size(26.dp).clickable { CollectionsRepo.moveItem(fresh.id, item.tmdbId, 1) },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down", tint = colors.mutedForeground, modifier = Modifier.size(18.dp))
                                     }
                                 }
                             }
@@ -696,7 +855,8 @@ fun CollItem.toMediaItem(): MediaItem = MediaItem(
 
 /**
  * "Add to Collections" picker: tick several lists at once, or create one inline.
- * Used from the detail page and from Browse's multi-select.
+ * Reached from the detail page's My List button (and later from Browse's
+ * multi-select).
  */
 @Composable
 fun CollectionPickerModal(

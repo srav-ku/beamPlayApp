@@ -126,6 +126,27 @@ object CollectionsRepo {
         )
     }
 
+    /** Reorders inside one list - drives the Custom order view arrows. */
+    fun moveItem(collectionId: String, tmdbId: Long, delta: Int) {
+        update(
+            collections.map { collection ->
+                if (collection.id != collectionId) collection
+                else {
+                    val list = collection.items.toMutableList()
+                    val from = list.indexOfFirst { it.tmdbId == tmdbId }
+                    if (from >= 0) {
+                        val to = (from + delta).coerceIn(0, list.size - 1)
+                        if (to != from) {
+                            val moved = list.removeAt(from)
+                            list.add(to, moved)
+                        }
+                    }
+                    collection.copy(items = list)
+                }
+            },
+        )
+    }
+
     fun removeItem(collectionId: String, tmdbId: Long) {
         update(
             collections.map {
