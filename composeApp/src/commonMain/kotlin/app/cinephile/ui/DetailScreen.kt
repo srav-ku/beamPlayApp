@@ -77,6 +77,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
+import app.cinephile.data.CollectionsRepo
 
 /**
  * Title detail screen.
@@ -105,11 +106,15 @@ fun BeamDetailScreen(
     var studios by remember { mutableStateOf<List<String>>(emptyList()) }
     var videos by remember { mutableStateOf<List<app.cinephile.core.model.TmdbVideo>>(emptyList()) }
     var sources by remember { mutableStateOf<List<app.cinephile.core.model.Link>>(emptyList()) }
-    var watchLater by remember { mutableStateOf(false) }
+
     var favorite by remember { mutableStateOf(false) }
     var watched by remember { mutableStateOf(false) }
     var myRating by remember { mutableStateOf(0) }
     var showTrailer by remember { mutableStateOf(false) }
+    var showPicker by remember { mutableStateOf(false) }
+    // Watch Later membership comes from the collections store, so a save made
+    // anywhere in the app is reflected here.
+    val savedInList = CollectionsRepo.inWatchLater(item.tmdb_id ?: item.id)
     var resolving by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
     var showPremium by remember { mutableStateOf(false) }
@@ -120,11 +125,12 @@ fun BeamDetailScreen(
     var showDownloads by remember { mutableStateOf(false) }
 
     // Back closes an open sheet first - never the whole screen underneath it.
-    PlatformBackHandler(enabled = showSources || showDownloads || showPremium || showTrailer) {
+    PlatformBackHandler(enabled = showSources || showDownloads || showPremium || showTrailer || showPicker) {
         showSources = false
         showDownloads = false
         showPremium = false
         showTrailer = false
+        showPicker = false
     }
     var resolvingUrl by remember { mutableStateOf<String?>(null) }
     var downloadFiles by remember { mutableStateOf<List<app.cinephile.core.model.DownloadFile>>(emptyList()) }
@@ -191,7 +197,7 @@ fun BeamDetailScreen(
                 resolving = resolving,
                 watched = watched,
                 favorite = favorite,
-                watchLater = watchLater,
+                watchLater = savedInList,
                 onBack = onBack,
                 resume = resumeItem,
                 trailer = trailer,
@@ -204,7 +210,7 @@ fun BeamDetailScreen(
                         showSources = true
                     }
                 },
-                onWatchLater = { watchLater = !watchLater },
+                onWatchLater = { showPicker = true },
                 onWatched = { watched = !watched },
                 onFavorite = { favorite = !favorite },
                 onDownload = {
@@ -346,6 +352,57 @@ fun BeamDetailScreen(
             }
         }
 
+        // ---- In Your Collections: the lists that already hold this title ----
+        val inCollections = CollectionsRepo.collectionsWith(item.tmdb_id ?: item.id)
+        if (inCollections.isNotEmpty()) {
+            item {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Spacer(Modifier.height(24.dp))
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(colors.card)
+                            .border(1.dp, colors.border, RoundedCornerShape(18.dp))
+                            .padding(16.dp),
+                    ) {
+                        Text(
+                            text = "In Your Collections",
+                            color = colors.foreground,
+                            fontFamily = Fraunces,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        inCollections.forEach { holding ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Filled.Bookmark, contentDescription = null, tint = colors.amber500, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = holding.name,
+                                    color = colors.foreground,
+                                    fontFamily = GeistMono,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = holding.items.size.toString(),
+                                    color = colors.mutedForeground,
+                                    fontFamily = GeistMono,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ---- Cast: 3 columns, circular portraits, name + character ----
         if (cast.isNotEmpty()) {
             item {
@@ -463,6 +520,22 @@ fun BeamDetailScreen(
                     }
                 },
                 onDismiss = { showSources = false },
+            )
+        }
+
+        if (showPicker) {
+            CollectionPickerModal(
+                items = listOf(
+                    CollectionsRepo.entryFrom(
+                        tmdbId = item.tmdb_id,
+                        mediaId = item.id,
+                        title = item.title,
+                        posterPath = item.poster_path,
+                        year = item.year,
+                        type = item.type,
+                    ),
+                ),
+                onDismiss = { showPicker = false },
             )
         }
 

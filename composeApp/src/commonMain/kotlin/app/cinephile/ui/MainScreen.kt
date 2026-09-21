@@ -118,6 +118,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
+import app.cinephile.data.CollectionsRepo
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -379,6 +380,23 @@ private fun HomeTab(
     // Session-scoped Watch Later: real behaviour, no backend needed yet.
     var watchLater by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
 
+    // Watch Later is the store's default collection, so a bookmark made anywhere
+    // in the app shows up here (and survives a restart).
+    fun refreshWatchLater() {
+        watchLater = CollectionsRepo.byId(CollectionsRepo.WATCH_LATER)?.items
+            ?.map { it.toMediaItem() } ?: emptyList()
+    }
+    fun toggleSaved(item: MediaItem) {
+        CollectionsRepo.toggleWatchLater(
+            CollectionsRepo.entryFrom(
+                tmdbId = item.tmdb_id, mediaId = item.id, title = item.title,
+                posterPath = item.poster_path, year = item.year, type = item.type,
+            ),
+        )
+        refreshWatchLater()
+    }
+    LaunchedEffect(Unit) { CollectionsRepo.ensureLoaded(); refreshWatchLater() }
+
     var trendingMovies by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var trendingSeries by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var nowPlayingMovies by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
@@ -583,13 +601,7 @@ private fun HomeTab(
                                         modifier = Modifier.fillParentMaxWidth(0.82f).widthIn(max = 360.dp),
                                         item = item,
                                         added = watchLater.any { it.tmdb_id == item.tmdb_id },
-                                        onToggleAdd = {
-                                            watchLater = if (watchLater.any { it.tmdb_id == item.tmdb_id }) {
-                                                watchLater.filterNot { it.tmdb_id == item.tmdb_id }
-                                            } else {
-                                                watchLater + item
-                                            }
-                                        },
+                                        onToggleAdd = { toggleSaved(item) },
                                         onClick = { onOpenMedia(item) },
                                     )
                                 }
@@ -660,13 +672,7 @@ private fun HomeTab(
                                         modifier = Modifier.fillParentMaxWidth(0.82f).widthIn(max = 360.dp),
                                         item = item,
                                         added = watchLater.any { it.tmdb_id == item.tmdb_id },
-                                        onToggleAdd = {
-                                            watchLater = if (watchLater.any { it.tmdb_id == item.tmdb_id }) {
-                                                watchLater.filterNot { it.tmdb_id == item.tmdb_id }
-                                            } else {
-                                                watchLater + item
-                                            }
-                                        },
+                                        onToggleAdd = { toggleSaved(item) },
                                         onClick = { onOpenMedia(item) },
                                     )
                                 }
@@ -2208,71 +2214,8 @@ private fun SearchTab(onOpenMedia: (MediaItem) -> Unit) {
 
 @Composable
 private fun LibraryTab(onOpenMedia: (MediaItem) -> Unit) {
-    val session by app.cinephile.data.SessionManager.session.collectAsState()
-    val s = session
-
-    Column(Modifier.fillMaxSize().background(BeamColors.bg).statusBarsPadding()) {
-        Text(
-            "Library",
-            fontFamily = GeistMono,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Black,
-            color = Color.White,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        )
-
-        if (s == null || s.method == "guest") {
-            Box(Modifier.fillMaxWidth().padding(top = 100.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🍿", fontSize = 44.sp)
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        "Your Library",
-                        fontFamily = GeistMono,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Watchlist, Liked & Continue Watching sync will be fully enabled here",
-                        fontFamily = GeistMono,
-                        fontSize = 12.5.sp,
-                        color = Color(0xFFA1A1AA),
-                        modifier = Modifier.padding(horizontal = 40.dp),
-                        lineHeight = 18.sp,
-                    )
-                }
-            }
-        } else {
-            var items by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
-            var loading by remember { mutableStateOf(true) }
-            LaunchedEffect(Unit) {
-                try {
-                    items = Api.library("favorites").items
-                } catch (_: Exception) { }
-                loading = false
-            }
-            if (loading) {
-                Box(Modifier.fillMaxWidth().padding(top = 100.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp)
-                }
-            } else if (items.isEmpty()) {
-                ErrorBlock("Your library is empty — bookmark titles to see them here")
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    items(items, key = { "${it.type ?: "movie"}_${it.id}" }) {
-                        LatestPosterCard(it, width = 110.dp, onClick = { onOpenMedia(it) })
-                    }
-                }
-            }
-        }
-    }
+    // The Library is collections: default lists plus anything the user creates.
+    CollectionsScreen(onOpenMedia = onOpenMedia)
 }
 
 /** Profile -> Settings -> Subtitle settings. */
