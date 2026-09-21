@@ -305,7 +305,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
                     Tab.Search -> SearchTab(handleCardClick)
                     Tab.Library -> LibraryTab(handleCardClick)
-                    Tab.Profile -> ProfileTab(subtitleSettings)
+                    Tab.Profile -> ProfileTab(subtitleSettings, onResumeContinue)
                 }
             }
 
@@ -2372,67 +2372,9 @@ private fun LibraryTab(onOpenMedia: (MediaItem) -> Unit) {
 
 /** Profile -> Settings -> Subtitle settings. */
 @Composable
-private fun ProfileTab(subtitleSettings: @Composable () -> Unit) {
-    var showSettings by remember { mutableStateOf(false) }
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(BeamColors.bg),
-    ) {
-        if (showSettings) {
-            Column(Modifier.fillMaxSize()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clickable { showSettings = false },
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Text("Settings", color = Color.White, fontSize = 18.sp)
-                }
-                subtitleSettings()
-            }
-        } else {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp),
-            ) {
-                Spacer(Modifier.height(12.dp))
-                Text("Profile", color = Color.White, fontSize = 24.sp)
-                Spacer(Modifier.height(20.dp))
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF141419))
-                        .clickable { showSettings = true }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = "Settings",
-                        tint = Color(0xFFEDEDED),
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Text("Settings", color = Color(0xFFEDEDED), fontSize = 15.sp)
-                }
-            }
-        }
-    }
+private fun ProfileTab(subtitleSettings: @Composable () -> Unit, onResumeContinue: (ContinueItem) -> Unit) {
+    // The whole profile lives in ProfileScreen; this keeps the tab wiring in one place.
+    ProfileScreen(subtitleSettings = subtitleSettings, onResumeContinue = onResumeContinue)
 }
 
 /**
@@ -2521,4 +2463,5 @@ private fun ContinueWatchingAllScreen(
         }
     }
 }
+
 
