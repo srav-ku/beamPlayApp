@@ -159,14 +159,16 @@ fun BeamDetailScreen(
     }
 
     // Stream sources for this title (real data from the worker).
+    //
+    // The worker enforces streaming server-side: while it is a premium feature it
+    // answers HTTP 402 for a non-premium account. So "no links" here means "the
+    // gate is closed", not "nothing exists" - which is why the Play button opens
+    // the premium sheet instead of a dead sources list.
     LaunchedEffect(item.id) {
-        runCatching { servicesOrNull?.beamApi?.getMovieLinks(item.id) }
-            .onSuccess { result -> sources = result?.items ?: emptyList(); premiumRequired = false }
-            .onFailure {
-                val locked = app.cinephile.data.EntitlementsState.streamLockedForThisUser
-                premiumRequired = locked
-                if (!locked) sources = emptyList()
-            }
+        val result = runCatching { servicesOrNull?.beamApi?.getMovieLinks(item.id) }.getOrNull()
+        sources = result?.items ?: emptyList()
+        premiumRequired = sources.isEmpty() ||
+            app.cinephile.data.EntitlementsState.streamLockedForThisUser
     }
 
     val title = item.title
