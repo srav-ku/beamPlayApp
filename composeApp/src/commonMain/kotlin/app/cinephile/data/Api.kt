@@ -177,7 +177,7 @@ object Api {
             return null
         }
         val person = try {
-            json.decodeFromString(TmdbPerson.serializer(), raw)
+            PersonJson.decodeFromString(TmdbPerson.serializer(), raw)
         } catch (e: Exception) {
             println("Person parse failed for $id: ${e.message}")
             return null

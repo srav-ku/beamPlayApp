@@ -1,6 +1,7 @@
 package app.cinephile.data
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /* ------------------------------------------------------------------ */
 /*  TMDB person + combined credits. Fetched directly from the device.  */
@@ -53,4 +54,12 @@ data class PersonCredit(
 
     /** Character when acting, otherwise the job - never both. */
     val role: String? get() = character?.takeIf { it.isNotBlank() } ?: job?.takeIf { it.isNotBlank() }
+}
+/**
+ * TMDB returns far more fields than the app cares about, so this decoder
+ * ignores anything undeclared instead of failing the whole payload.
+ */
+val PersonJson: Json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
 }
