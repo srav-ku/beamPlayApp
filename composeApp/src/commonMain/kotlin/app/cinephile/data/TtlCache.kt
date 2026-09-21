@@ -14,9 +14,12 @@ package app.cinephile.data
 object TtlCache {
     private val entries = mutableMapOf<String, Pair<Long, Any>>()
 
-    const val TMDB_TTL = 10 * 60 * 1000L
-    const val FILTERS_TTL = 30 * 60 * 1000L
-    const val PAGE_TTL = 4 * 60 * 1000L
+    /** TMDB refreshes these rails about once a day, so six hours is plenty. */
+    const val TMDB_TTL = 6 * 60 * 60 * 1000L
+    /** Genres/years/languages only change when the catalogue does. */
+    const val FILTERS_TTL = 12 * 60 * 60 * 1000L
+    /** Catalogue pages: long enough to feel instant, short enough to pick up imports. */
+    const val PAGE_TTL = 30 * 60 * 1000L
 
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> get(key: String, ttlMs: Long): T? {
