@@ -121,6 +121,7 @@ import androidx.compose.foundation.layout.offset
 import app.cinephile.data.CollectionsRepo
 import app.cinephile.data.TtlCache
 import app.cinephile.data.cached
+import androidx.compose.foundation.combinedClickable
 
 /** Titles per request, and how many the grid reveals at a time. */
 private const val PAGE_SIZE_FETCH = 100
@@ -399,7 +400,11 @@ private fun HomeTab(
                 val pS = async { Api.getTmdbPopularSeries() }
                 val fOpts = async { runCatching { Api.getFilterOptions().genres }.getOrDefault(emptyList()) }
 
+                // Paint as soon as the first rails land, then let the rest fill in.
+                // Waiting for all ten made the whole screen feel slow on a thin link.
                 val tm = tM.await(); val ts = tS.await()
+                trendingMovies = tm; trendingSeries = ts
+                loading = false
                 val npm = npM.await(); val ats = atS.await()
                 val trm = trM.await(); val trs = trS.await()
                 val pm = pM.await(); val ps = pS.await()
@@ -1433,6 +1438,11 @@ private fun BrowseTab(
     var showFilters by remember { mutableStateOf(false) }
     var retry by remember { mutableStateOf(0) }
 
+    // Multi-select: long-press a poster to start, then tap to add or remove.
+    var selecting by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var showAddToCollections by remember { mutableStateOf(false) }
+
     val colors = Beam.colors
     val gridState = rememberLazyGridState()
 
@@ -1637,6 +1647,59 @@ private fun BrowseTab(
 
         Spacer(Modifier.height(24.dp))
 
+        if (selecting) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.amber500.copy(alpha = 0.12f))
+                    .border(1.dp, colors.amber500.copy(alpha = 0.5f), RoundedCornerShape(50))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = selected.size.toString() + " selected",
+                    color = colors.amber500,
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "Select all",
+                    color = colors.foreground,
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
+                    modifier = Modifier.clickable { selected = items },
+                )
+                Text(
+                    text = "Add to Collection",
+                    color = Color(0xFF101014),
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (selected.isEmpty()) colors.muted else colors.amber500)
+                        .clickable(enabled = selected.isNotEmpty()) { showAddToCollections = true }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+                Text(
+                    text = "Cancel",
+                    color = colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 12.sp,
+                    modifier = Modifier.clickable {
+                        selecting = false
+                        selected = emptyList()
+                    },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         when {
             loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = colors.amber500, strokeWidth = 2.dp)
@@ -1689,6 +1752,7 @@ private fun BrowseTab(
                     BrowsePosterCard(
                         item = item,
                         saved = CollectionsRepo.inWatchLater(item.tmdb_id ?: item.id),
+                        selected = selecting && selected.any { it.tmdb_id == item.tmdb_id && it.id == item.id },
                         onToggleSave = {
                             CollectionsRepo.toggleWatchLater(
                                 CollectionsRepo.entryFrom(
@@ -1697,7 +1761,23 @@ private fun BrowseTab(
                                 ),
                             )
                         },
-                        onClick = { onOpenMedia(item) },
+                        onClick = {
+                            if (selecting) {
+                                selected = if (selected.any { it.tmdb_id == item.tmdb_id && it.id == item.id }) {
+                                    selected.filterNot { it.tmdb_id == item.tmdb_id && it.id == item.id }
+                                } else {
+                                    selected + item
+                                }
+                            } else {
+                                onOpenMedia(item)
+                            }
+                        },
+                        onLongClick = {
+                            selecting = true
+                            if (selected.none { it.tmdb_id == item.tmdb_id && it.id == item.id }) {
+                                selected = selected + item
+                            }
+                        },
                     )
                 }
 
@@ -1710,6 +1790,22 @@ private fun BrowseTab(
                 }
             }
         }
+    }
+
+    if (showAddToCollections) {
+        CollectionPickerModal(
+            items = selected.map {
+                CollectionsRepo.entryFrom(
+                    tmdbId = it.tmdb_id, mediaId = it.id, title = it.title,
+                    posterPath = it.poster_path, year = it.year, type = it.type,
+                )
+            },
+            onDismiss = {
+                showAddToCollections = false
+                selecting = false
+                selected = emptyList()
+            },
+        )
     }
 
     if (showFilters) {
@@ -1743,20 +1839,35 @@ private fun BrowseTab(
 
 /** Compact 3-column grid card: poster, bookmark chip, title, rating + year. */
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun BrowsePosterCard(
     item: MediaItem,
     saved: Boolean,
+    selected: Boolean = false,
     onToggleSave: () -> Unit,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val colors = Beam.colors
-    Column(Modifier.clickable(onClick = onClick)) {
+    Column(
+        Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = { onLongClick?.invoke() },
+        ),
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(6.dp))
-                .background(colors.card),
+                .background(colors.card)
+                .then(
+                    if (selected) {
+                        Modifier.border(2.dp, colors.amber500, RoundedCornerShape(6.dp))
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
             Api.backdropUrl(item.poster_path, "w342")?.let { url ->
                 AsyncImage(
