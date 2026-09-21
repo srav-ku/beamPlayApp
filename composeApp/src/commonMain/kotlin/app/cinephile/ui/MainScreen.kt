@@ -122,6 +122,8 @@ import app.cinephile.data.CollectionsRepo
 import app.cinephile.data.TtlCache
 import app.cinephile.data.cached
 import androidx.compose.foundation.combinedClickable
+/** First paint is small on purpose; later pages are bigger. */
+private const val PAGE_SIZE_FIRST = 24
 
 /** Titles per request, and how many the grid reveals at a time. */
 private const val PAGE_SIZE_FETCH = 100
@@ -1470,7 +1472,7 @@ private fun BrowseTab(
                 visible = PAGE_SIZE_VISIBLE
                 items = cachedBuffer.take(visible)
                 nextPage = 1
-                endReached = cachedBuffer.size < PAGE_SIZE_FETCH
+                endReached = cachedBuffer.size < PAGE_SIZE_FIRST
                 loading = false
                 return
             }
@@ -1479,15 +1481,16 @@ private fun BrowseTab(
             loadingMore = true
         }
         error = null
+        val pageSize = if (target == 1) PAGE_SIZE_FIRST else PAGE_SIZE_FETCH
         try {
             val res = if (kind == "movies") {
                 Api.movies(
-                    page = target, limit = PAGE_SIZE_FETCH, genre = genre, year = exactYear,
+                    page = target, limit = pageSize, genre = genre, year = exactYear,
                     yearFrom = fromYear, yearTo = toYear, language = language,
                 )
             } else {
                 Api.seriesList(
-                    page = target, limit = PAGE_SIZE_FETCH, genre = genre, year = exactYear,
+                    page = target, limit = pageSize, genre = genre, year = exactYear,
                     yearFrom = fromYear, yearTo = toYear, language = language,
                 )
             }
@@ -1503,7 +1506,7 @@ private fun BrowseTab(
             }
             items = buffer.take(visible)
             nextPage = target + 1
-            endReached = incoming.size < PAGE_SIZE_FETCH
+            endReached = incoming.size < pageSize
         } catch (e: Exception) {
             error = "Could not load content. Check your connection."
         } finally {
