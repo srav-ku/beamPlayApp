@@ -54,7 +54,7 @@ object TtlCache {
             .getOrDefault(emptyMap())
         stored.forEach { (key, entry) ->
             val list = runCatching { json.decodeFromString<List<MediaItem>>(entry.data) }.getOrNull()
-            if (list != null) entries[key] = entry.time to list
+            if (!list.isNullOrEmpty()) entries[key] = entry.time to list
         }
     }
 
@@ -69,6 +69,10 @@ object TtlCache {
     }
 
     fun put(key: String, value: Any) {
+        // Never cache an empty result: an empty list has no value to show and would
+        // otherwise be served (and persisted) instead of a real fetch.
+        val list = value as? List<*>
+        if (list != null && list.isEmpty()) return
         entries[key] = nowMillis() to value
         if (persistable(key)) saveSoon()
     }

@@ -1467,7 +1467,9 @@ private fun BrowseTab(
         val cacheKey = "browse." + kind + "." + genre + "." + language + "." + yearStart + "." + yearEnd
 
         if (replace) {
-            TtlCache.get<List<MediaItem>>(cacheKey, TtlCache.PAGE_TTL)?.let { cachedBuffer ->
+            // An empty cached list is never served: a failed fetch once cached an
+            // empty buffer, which then persisted and made the grid load nothing.
+            TtlCache.get<List<MediaItem>>(cacheKey, TtlCache.PAGE_TTL)?.takeIf { it.isNotEmpty() }?.let { cachedBuffer ->
                 buffer = cachedBuffer
                 visible = PAGE_SIZE_VISIBLE
                 items = cachedBuffer.take(visible)
