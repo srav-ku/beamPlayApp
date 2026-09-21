@@ -164,6 +164,28 @@ object Api {
         parseTmdbResults(fetchTmdbRaw("/tv/popular"), "series").take(14)
     }
 
+    /**
+     * One person: biography plus the full combined credits, sorted by popularity
+     * so the best-known work lands first. Cached for the same 6h as the rails.
+     */
+    suspend fun getPerson(id: Long): TmdbPerson? {
+        TtlCache.get<TmdbPerson>("tmdb.person.$id", TtlCache.TMDB_TTL)?.let { return it }
+        val raw = try {
+            fetchTmdbRaw("/person/$id?append_to_response=combined_credits")
+        } catch (e: Exception) {
+            println("Person fetch failed for $id: ${e.message}")
+            return null
+        }
+        val person = try {
+            json.decodeFromString(TmdbPerson.serializer(), raw)
+        } catch (e: Exception) {
+            println("Person parse failed for $id: ${e.message}")
+            return null
+        }
+        TtlCache.put("tmdb.person.$id", person)
+        return person
+    }
+
     // ── Backend Database Endpoints ──────────────────────────────────────────
 
     suspend fun getMovieByTmdb(tmdbId: Long): MediaItem? {

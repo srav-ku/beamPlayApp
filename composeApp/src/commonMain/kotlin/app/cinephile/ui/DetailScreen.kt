@@ -95,6 +95,7 @@ fun BeamDetailScreen(
     trailer: app.cinephile.core.model.TmdbVideo? = null,
     onTrailer: () -> Unit = {},
     onOpenMedia: (MediaItem) -> Unit,
+    onOpenPerson: (Long) -> Unit = {},
     onPlay: (String, List<PlayerSubtitle>, String) -> Unit,
 ) {
     val colors = Beam.colors
@@ -195,6 +196,8 @@ fun BeamDetailScreen(
             HeroCard(
                 item = item,
                 directors = directors.map { it.name },
+                directorIds = directors.map { it.id },
+                onOpenPerson = onOpenPerson,
                 premiumLocked = premiumLocked,
                 resolving = resolving,
                 watched = watched,
@@ -418,7 +421,9 @@ fun BeamDetailScreen(
                     ) {
                         items(cast.take(10)) { person ->
                             Column(
-                                modifier = Modifier.width(72.dp),
+                                modifier = Modifier
+                                    .width(72.dp)
+                                    .clickable(enabled = person.id != 0L) { onOpenPerson(person.id) },
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 AvatarCircle(person.profile_path, person.name, 56.dp)
@@ -800,6 +805,8 @@ private fun DetailButton(
 private fun HeroCard(
     item: MediaItem,
     directors: List<String>,
+    directorIds: List<Long> = emptyList(),
+    onOpenPerson: (Long) -> Unit = {},
     premiumLocked: Boolean,
     resolving: Boolean,
     watched: Boolean,
@@ -1025,14 +1032,23 @@ private fun HeroCard(
                                 fontFamily = GeistMono,
                                 fontSize = 13.sp,
                             )
-                            Text(
-                                text = directors.joinToString(", "),
-                                color = colors.amber500,
-                                fontFamily = GeistMono,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            // Each director opens their own page, so credit where credit is due.
+                            directors.forEachIndexed { index, name ->
+                                val personId = directorIds.getOrNull(index)
+                                Text(
+                                    text = if (index < directors.lastIndex) name + ", " else name,
+                                    color = colors.amber500,
+                                    fontFamily = GeistMono,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = if (personId != null && personId != 0L) {
+                                        Modifier.clickable { onOpenPerson(personId) }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                            }
                         }
                     }
                 }

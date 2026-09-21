@@ -202,13 +202,25 @@ private fun AppNavHost() {
     var playback by remember { mutableStateOf<PlaybackRequest?>(null) }
     // Last tab the user was on, so back from a detail screen returns there.
     var mainTab by remember { mutableStateOf(app.cinephile.ui.Tab.Home) }
+    // A person page sits alongside the detail stack; detailFromPerson remembers that
+    // the current title was opened from someone's filmography, so back returns there.
+    var personId by remember { mutableStateOf<Long?>(null) }
+    var detailFromPerson by remember { mutableStateOf(false) }
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     // Back button: close the player, then unwind the detail stack; only when there is
     // nothing left to close does the press fall through to the platform and exit the app.
-    PlatformBackHandler(enabled = playback != null || backStack.isNotEmpty()) {
-        if (playback != null) playback = null else backStack = backStack.dropLast(1)
+    PlatformBackHandler(enabled = playback != null || backStack.isNotEmpty() || personId != null) {
+        when {
+            playback != null -> playback = null
+            detailFromPerson -> {
+                detailFromPerson = false
+                backStack = backStack.dropLast(1)
+            }
+            personId != null -> personId = null
+            else -> backStack = backStack.dropLast(1)
+        }
     }
 
     // Premium state: fetched once per launch, cached, never blocking the UI.
@@ -233,6 +245,15 @@ private fun AppNavHost() {
             onProgress = { _, _ -> },
         )
         }
+
+        personId != null && !detailFromPerson -> PersonScreen(
+            personId = personId ?: 0L,
+            onClose = { personId = null },
+            onOpenMedia = { media ->
+                backStack = backStack + media
+                detailFromPerson = true
+            },
+        )
 
         current == null -> MainScreen(
             initialTab = mainTab,
@@ -263,6 +284,10 @@ private fun AppNavHost() {
             item = current,
             onBack = { backStack = backStack.dropLast(1) },
             onOpenMedia = { backStack = backStack + it },
+            onOpenPerson = { id ->
+                personId = id
+                detailFromPerson = false
+            },
             onPlay = { url, subs, src -> playback = PlaybackRequest(current.title, url, subs, current.backdrop_path ?: current.poster_path, src) },
         )
     }
