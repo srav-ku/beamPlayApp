@@ -1526,7 +1526,10 @@ private fun BrowseTab(
         visible = PAGE_SIZE_VISIBLE
         nextPage = 1
         endReached = false
-        runCatching { gridState.scrollToItem(0) }
+        // scrollToItem suspends until the grid has been laid out, and while the
+        // spinner branch is showing there is no grid to lay out - so it never
+        // resumed and the fetch below was never reached. Fire it off separately.
+        launch { runCatching { gridState.scrollToItem(0) } }
         loadPage(1, replace = true)
     }
 
