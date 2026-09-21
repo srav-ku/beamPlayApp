@@ -122,6 +122,11 @@ import app.cinephile.data.CollectionsRepo
 import app.cinephile.data.TtlCache
 import app.cinephile.data.cached
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.ui.graphics.SolidColor
 /** First paint is small on purpose; later pages are bigger. */
 private const val PAGE_SIZE_FIRST = 24
 
@@ -1445,6 +1450,12 @@ private fun BrowseTab(
     var selected by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var showAddToCollections by remember { mutableStateOf(false) }
 
+    // Back leaves selection mode instead of the screen.
+    PlatformBackHandler(enabled = selecting) {
+        selecting = false
+        selected = emptyList()
+    }
+
     val colors = Beam.colors
     val gridState = rememberLazyGridState()
 
@@ -1656,56 +1667,60 @@ private fun BrowseTab(
         Spacer(Modifier.height(24.dp))
 
         if (selecting) {
+            // Flat toolbar, no border: hierarchy comes from the card surface, not
+            // from a warning-sign outline.
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(colors.amber500.copy(alpha = 0.12f))
-                    .border(1.dp, colors.amber500.copy(alpha = 0.5f), RoundedCornerShape(50))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.card)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Exit selection",
+                    tint = colors.mutedForeground,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clickable {
+                            selecting = false
+                            selected = emptyList()
+                        },
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
                     text = selected.size.toString() + " selected",
-                    color = colors.amber500,
+                    color = colors.foreground,
                     fontFamily = GeistMono,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "Select all",
-                    color = colors.foreground,
+                    text = "Select All",
+                    color = colors.foreground.copy(alpha = 0.7f),
                     fontFamily = GeistMono,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     modifier = Modifier.clickable { selected = items },
                 )
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = "Add to Collection",
-                    color = Color(0xFF101014),
+                    color = colors.background,
                     fontFamily = GeistMono,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
+                        .height(36.dp)
                         .clip(RoundedCornerShape(50))
                         .background(if (selected.isEmpty()) colors.muted else colors.amber500)
                         .clickable(enabled = selected.isNotEmpty()) { showAddToCollections = true }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-                Text(
-                    text = "Cancel",
-                    color = colors.mutedForeground,
-                    fontFamily = GeistMono,
-                    fontSize = 12.sp,
-                    modifier = Modifier.clickable {
-                        selecting = false
-                        selected = emptyList()
-                    },
+                        .padding(horizontal = 14.dp),
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
         }
 
         when {
@@ -2506,3 +2521,4 @@ private fun ContinueWatchingAllScreen(
         }
     }
 }
+

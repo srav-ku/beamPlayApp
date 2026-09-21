@@ -77,6 +77,12 @@ import app.cinephile.data.CollItem
 import app.cinephile.data.CollectionsRepo
 import app.cinephile.data.MediaItem
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 
 /* ------------------------------------------------------------------------- */
 /* Building blocks                                                            */
@@ -875,18 +881,31 @@ fun CollectionPickerModal(
                 Modifier
                     .fillMaxWidth()
                     .padding(20.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(colors.card)
-                    .border(1.dp, colors.border, RoundedCornerShape(24.dp))
-                    .padding(20.dp),
+                    .padding(16.dp),
             ) {
-                Text(
-                    text = "Add " + items.size + " item" + (if (items.size == 1) "" else "s") + " to Collections",
-                    color = colors.foreground,
-                    fontFamily = Fraunces,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                // Plain sans header: the serif belongs to editorial titles, not chrome.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Add " + items.size + " item" + (if (items.size == 1) "" else "s") + " to Collections",
+                        color = colors.foreground,
+                        fontFamily = GeistMono,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Close",
+                        tint = colors.foreground.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { onDismiss() },
+                    )
+                }
 
                 Spacer(Modifier.height(14.dp))
 
@@ -897,28 +916,33 @@ fun CollectionPickerModal(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (on) colors.amber500.copy(alpha = 0.12f) else Color.Transparent)
-                                    .border(1.dp, if (on) colors.amber500.copy(alpha = 0.55f) else colors.border, RoundedCornerShape(16.dp))
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (on) colors.amber500.copy(alpha = 0.1f) else colors.background)
+                                    .border(1.dp, if (on) colors.amber500 else colors.border, RoundedCornerShape(12.dp))
                                     .clickable {
                                         selected = if (on) selected - collection.id else selected + collection.id
                                     }
                                     .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Box(
-                                    Modifier
-                                        .size(20.dp)
-                                        .clip(RoundedCornerShape(5.dp))
-                                        .background(if (on) colors.amber500 else Color.Transparent)
-                                        .border(1.dp, if (on) Color.Transparent else colors.border, RoundedCornerShape(5.dp)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    if (on) {
-                                        Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF101014), modifier = Modifier.size(14.dp))
-                                    }
-                                }
-                                Spacer(Modifier.width(12.dp))
+                                Checkbox(
+                                    checked = on,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = colors.amber500,
+                                        checkmarkColor = colors.background,
+                                        uncheckedColor = colors.mutedForeground,
+                                    ),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Icon(
+                                    imageVector = Icons.Filled.Folder,
+                                    contentDescription = null,
+                                    tint = colors.mutedForeground,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = collection.name,
                                     color = colors.foreground,
@@ -942,42 +966,89 @@ fun CollectionPickerModal(
                 Spacer(Modifier.height(14.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextField(
-                        value = newName,
-                        onValueChange = { newName = it },
-                        placeholder = { Text("New list name", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 13.sp) },
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = colors.muted,
-                            unfocusedContainerColor = colors.muted,
-                            focusedTextColor = colors.foreground,
-                            unfocusedTextColor = colors.foreground,
-                            cursorColor = colors.amber500,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    )
-                    CircleChip(Icons.Filled.Add, "Create list") {
-                        if (newName.isNotBlank()) {
-                            val created = CollectionsRepo.create(newName)
-                            selected = selected + created.id
-                            newName = ""
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.background)
+                            .border(1.dp, colors.border, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (newName.isEmpty()) {
+                            Text(
+                                text = "New list name",
+                                color = colors.mutedForeground,
+                                fontFamily = GeistMono,
+                                fontSize = 14.sp,
+                            )
                         }
+                        BasicTextField(
+                            value = newName,
+                            onValueChange = { newName = it },
+                            singleLine = true,
+                            textStyle = TextStyle(color = colors.foreground, fontFamily = GeistMono, fontSize = 14.sp),
+                            cursorBrush = SolidColor(colors.amber500),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    // The same 48dp square as the field, so the pair reads as one control.
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (newName.isNotBlank()) colors.amber500 else colors.muted)
+                            .clickable(enabled = newName.isNotBlank()) {
+                                val created = CollectionsRepo.create(newName)
+                                selected = selected + created.id
+                                newName = ""
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Create list",
+                            tint = colors.background,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CollPill(label = "Cancel", primary = false, onClick = onDismiss)
-                    CollPill(
-                        label = if (selected.isEmpty()) "Select a list" else "Add to " + selected.size + " list" + (if (selected.size == 1) "" else "s"),
-                        primary = true,
-                        enabled = selected.isNotEmpty(),
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Cancel",
+                        color = colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .clickable { onDismiss() }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (selected.isEmpty()) colors.muted else colors.amber500)
+                            .clickable(enabled = selected.isNotEmpty()) {
+                                CollectionsRepo.addItems(selected, items)
+                                onDismiss()
+                            }
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
                     ) {
-                        CollectionsRepo.addItems(selected, items)
-                        onDismiss()
+                        Text(
+                            text = if (selected.isEmpty()) {
+                                "Add to Collection"
+                            } else {
+                                "Add to " + selected.size + " List" + (if (selected.size == 1) "" else "s")
+                            },
+                            color = if (selected.isEmpty()) colors.mutedForeground else colors.background,
+                            fontFamily = GeistMono,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                 }
             }
