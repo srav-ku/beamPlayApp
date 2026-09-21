@@ -119,6 +119,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import app.cinephile.data.CollectionsRepo
+import app.cinephile.data.TtlCache
+import app.cinephile.data.cached
+
+/** Titles per request, and how many the grid reveals at a time. */
+private const val PAGE_SIZE_FETCH = 100
+private const val PAGE_SIZE_VISIBLE = 12
 
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home),
@@ -1405,8 +1411,15 @@ private fun BrowseTab(
     onOverlayChange: (Boolean) -> Unit = {},
 ) {
     var kind by remember { mutableStateOf("movies") }
+
+    // Buffered paging: one request brings PAGE_SIZE_FETCH titles, the grid reveals
+    // them PAGE_SIZE_VISIBLE at a time purely from memory, and the buffer is cached
+    // per filter set. Scrolling costs no requests, and coming back to Browse inside
+    // the cache window costs none either.
+    var buffer by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var visible by remember { mutableStateOf(PAGE_SIZE_VISIBLE) }
     var items by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
-    var page by remember { mutableStateOf(1) }
+    var nextPage by remember { mutableStateOf(1) }
     var loading by remember { mutableStateOf(true) }
     var loadingMore by remember { mutableStateOf(false) }
     var endReached by remember { mutableStateOf(false) }
@@ -1418,48 +1431,69 @@ private fun BrowseTab(
     var yearEnd by remember { mutableStateOf<Int?>(null) }
     var options by remember { mutableStateOf(FilterOptionsUi()) }
     var showFilters by remember { mutableStateOf(false) }
-    // Bookmarks are Watch Later, straight from the collections store.
-    LaunchedEffect(Unit) { CollectionsRepo.ensureLoaded() }
     var retry by remember { mutableStateOf(0) }
 
     val colors = Beam.colors
     val gridState = rememberLazyGridState()
 
+    LaunchedEffect(Unit) { CollectionsRepo.ensureLoaded() }
+
+    // Genres, years and languages only change when the catalogue does.
     LaunchedEffect(Unit) {
-        runCatching { Api.getFilterOptions() }.getOrNull()?.let { f ->
-            options = FilterOptionsUi(f.genres, f.years, f.languages)
+        options = cached("filters.options", TtlCache.FILTERS_TTL) {
+            runCatching { Api.getFilterOptions() }.getOrNull()?.let { f ->
+                FilterOptionsUi(f.genres, f.years, f.languages)
+            } ?: FilterOptionsUi()
         }
     }
 
-    // Single year goes through the exact-match parameter; a real range uses the
-    // two range parameters the worker gained alongside this screen.
     val exactYear = if (yearStart != null && yearStart == yearEnd) yearStart.toString() else ""
     val fromYear = if (yearStart != null && yearStart != yearEnd) yearStart.toString() else null
     val toYear = if (yearEnd != null && yearStart != yearEnd) yearEnd.toString() else null
 
     suspend fun loadPage(target: Int, replace: Boolean) {
-        if (replace) loading = true else loadingMore = true
+        val cacheKey = "browse." + kind + "." + genre + "." + language + "." + yearStart + "." + yearEnd
+
+        if (replace) {
+            TtlCache.get<List<MediaItem>>(cacheKey, TtlCache.PAGE_TTL)?.let { cachedBuffer ->
+                buffer = cachedBuffer
+                visible = PAGE_SIZE_VISIBLE
+                items = cachedBuffer.take(visible)
+                nextPage = 1
+                endReached = cachedBuffer.size < PAGE_SIZE_FETCH
+                loading = false
+                return
+            }
+            loading = true
+        } else {
+            loadingMore = true
+        }
         error = null
         try {
             val res = if (kind == "movies") {
                 Api.movies(
-                    page = target, limit = 30, genre = genre, year = exactYear,
+                    page = target, limit = PAGE_SIZE_FETCH, genre = genre, year = exactYear,
                     yearFrom = fromYear, yearTo = toYear, language = language,
                 )
             } else {
                 Api.seriesList(
-                    page = target, limit = 30, genre = genre, year = exactYear,
+                    page = target, limit = PAGE_SIZE_FETCH, genre = genre, year = exactYear,
                     yearFrom = fromYear, yearTo = toYear, language = language,
                 )
             }
             val incoming = res.items
-            items = if (replace) {
+            buffer = if (replace) {
                 incoming
             } else {
-                items + incoming.filter { fresh -> items.none { it.id == fresh.id && it.type == fresh.type } }
+                buffer + incoming.filter { fresh -> buffer.none { it.tmdb_id == fresh.tmdb_id } }
             }
-            page = target
-            endReached = incoming.size < 30
+            if (replace) {
+                visible = PAGE_SIZE_VISIBLE
+                TtlCache.put(cacheKey, buffer)
+            }
+            items = buffer.take(visible)
+            nextPage = target + 1
+            endReached = incoming.size < PAGE_SIZE_FETCH
         } catch (e: Exception) {
             error = "Could not load content. Check your connection."
         } finally {
@@ -1473,15 +1507,20 @@ private fun BrowseTab(
         loadPage(1, replace = true)
     }
 
-    // Hide the bottom bar while the filter sheet is up.
     LaunchedEffect(showFilters) { onOverlayChange(showFilters) }
 
-
-    LaunchedEffect(gridState) {
+    LaunchedEffect(gridState, buffer, visible, endReached) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
             .collect { last ->
-                if (!endReached && !loading && !loadingMore && items.isNotEmpty() && last >= items.size - 6) {
-                    loadPage(page + 1, replace = false)
+                if (loading || loadingMore || items.isEmpty()) return@collect
+                if (last >= items.size - 4) {
+                    if (visible < buffer.size) {
+                        // Already in memory: reveal more, no request.
+                        visible = (visible + PAGE_SIZE_VISIBLE).coerceAtMost(buffer.size)
+                        items = buffer.take(visible)
+                    } else if (!endReached) {
+                        loadPage(nextPage, replace = false)
+                    }
                 }
             }
     }
@@ -1497,7 +1536,7 @@ private fun BrowseTab(
         ) {
             Text(
                 text = "Browse",
-                color = Color.White,
+                color = colors.foreground,
                 fontFamily = Fraunces,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -1548,7 +1587,6 @@ private fun BrowseTab(
             ) {
                 val segment = (maxWidth - 6.dp) / 2
                 val target = if (kind == "movies") 0.dp else segment
-                // The amber pill glides between the two labels.
                 val pillX by androidx.compose.animation.core.animateDpAsState(
                     targetValue = target,
                     animationSpec = androidx.compose.animation.core.spring(
@@ -1693,6 +1731,7 @@ private fun BrowseTab(
         )
     }
 }
+
 
 /** Compact 3-column grid card: poster, bookmark chip, title, rating + year. */
 @Composable
