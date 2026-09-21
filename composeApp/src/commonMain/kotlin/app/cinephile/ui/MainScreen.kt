@@ -131,13 +131,18 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 /**
- * Request Modal Dialog — identical to web app's RequestModal.tsx
+ * Shown when a tapped title is not in the catalogue yet.
+ *
+ * Styled with the app's own surfaces - card background, hairline border, amber
+ * primary, muted circle chips - and the copy says plainly what happened and what
+ * the button does.
  */
 @Composable
 fun RequestModalDialog(
     item: MediaItem,
     onDismiss: () -> Unit,
 ) {
+    val colors = Beam.colors
     var isSubmitting by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
@@ -145,131 +150,91 @@ fun RequestModalDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Box(
-            modifier = Modifier
+            Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF141416))
-                .border(1.dp, Color(0xFF2E2E34), RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.card)
+                .border(1.dp, colors.border, RoundedCornerShape(24.dp))
                 .padding(20.dp),
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Top close
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (submitted) "Request Sent" else "Not Available Yet",
-                        fontFamily = GeistMono,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        text = if (submitted) "Request sent" else "Not Available",
+                        color = colors.foreground,
+                        fontFamily = Fraunces,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                    Spacer(Modifier.weight(1f))
                     Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x33FFFFFF))
-                            .clickable(onClick = onDismiss),
+                        Modifier.size(34.dp).clip(CircleShape).background(colors.muted)
+                            .border(1.dp, colors.border, CircleShape).clickable(onClick = onDismiss),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = colors.foreground.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
                     }
                 }
-
                 Spacer(Modifier.height(16.dp))
-
-                // Backdrop image preview if available
                 val img = Api.backdropUrl(item.backdrop_path ?: item.poster_path, "w500")
                 if (!img.isNullOrBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                    ) {
-                        AsyncImage(
-                            model = img,
-                            contentDescription = item.title,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        )
+                    Box(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(18.dp)).background(colors.muted)) {
+                        AsyncImage(model = img, contentDescription = item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                     Spacer(Modifier.height(14.dp))
                 }
-
-                Text(
-                    text = item.title,
-                    fontFamily = GeistMono,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                )
-                Spacer(Modifier.height(8.dp))
-
+                Text(item.title, color = colors.foreground, fontFamily = GeistMono, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = if (submitted) {
-                        "We've received your request for \"${item.title}\". We'll add it as soon as possible!"
+                        "Request received for \u201C" + item.title + "\u201D. We will add it as soon as we can."
                     } else {
-                        "\"${item.title}\" isn't in our database yet. Tap Request and we'll add it for you."
+                        "\u201C" + item.title + "\u201D is not available. Send a request to add it"
                     },
+                    color = colors.mutedForeground,
                     fontFamily = GeistMono,
                     fontSize = 12.5.sp,
-                    color = Color(0xFFA1A1AA),
                     lineHeight = 18.sp,
                 )
-
                 errorMsg?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, color = Color(0xFFF87171), fontSize = 11.5.sp, fontFamily = GeistMono)
+                    Text(it, color = Color(0xFFEF4444), fontFamily = GeistMono, fontSize = 11.5.sp)
                 }
-
-                Spacer(Modifier.height(20.dp))
-
-                if (!submitted) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                Spacer(Modifier.height(18.dp))
+                if (submitted) {
+                    Box(
+                        Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(50)).background(colors.amber500).clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    isSubmitting = true
-                                    val ok = Api.submitRequest(item.title, item.tmdb_id, item.type ?: "movie")
-                                    isSubmitting = false
-                                    if (ok) submitted = true else errorMsg = "Could not submit request."
-                                }
-                            },
-                            enabled = !isSubmitting,
-                            modifier = Modifier.weight(1f).height(44.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                        ) {
-                            if (isSubmitting) {
-                                CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            } else {
-                                Text("+ Request to Add", fontFamily = GeistMono, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                        }
-
-                        Button(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(44.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222226), contentColor = Color.White),
-                        ) {
-                            Text("Not now", fontFamily = GeistMono, fontSize = 13.sp)
-                        }
+                        Text("Done", color = Color(0xFF101014), fontFamily = GeistMono, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                 } else {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                    ) {
-                        Text("Done", fontFamily = GeistMono, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(50)).background(colors.amber500)
+                                .clickable(enabled = !isSubmitting) {
+                                    scope.launch {
+                                        isSubmitting = true
+                                        val ok = Api.submitRequest(item.title, item.tmdb_id, item.type ?: "movie")
+                                        isSubmitting = false
+                                        if (ok) submitted = true else errorMsg = "Could not send the request. Try again."
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isSubmitting) {
+                                CircularProgressIndicator(color = Color(0xFF101014), modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("Request", color = Color(0xFF101014), fontFamily = GeistMono, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Box(
+                            Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(50)).border(1.dp, colors.border, RoundedCornerShape(50))
+                                .clickable(onClick = onDismiss),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("Not now", color = colors.foreground, fontFamily = GeistMono, fontSize = 14.sp)
+                        }
                     }
                 }
             }

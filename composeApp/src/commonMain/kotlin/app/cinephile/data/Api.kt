@@ -132,29 +132,37 @@ object Api {
         }
     }
 
-    suspend fun getTmdbTrendingMovies(): List<MediaItem> =
+    suspend fun getTmdbTrendingMovies(): List<MediaItem> = cached("tmdb.getTmdbTrendingMovies", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/trending/movie/week"), "movie").take(10)
+    }
 
-    suspend fun getTmdbTrendingSeries(): List<MediaItem> =
+    suspend fun getTmdbTrendingSeries(): List<MediaItem> = cached("tmdb.getTmdbTrendingSeries", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/trending/tv/week"), "series").take(10)
+    }
 
-    suspend fun getTmdbNowPlayingMovies(): List<MediaItem> =
+    suspend fun getTmdbNowPlayingMovies(): List<MediaItem> = cached("tmdb.getTmdbNowPlayingMovies", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/movie/now_playing"), "movie").take(14)
+    }
 
-    suspend fun getTmdbAiringTodaySeries(): List<MediaItem> =
+    suspend fun getTmdbAiringTodaySeries(): List<MediaItem> = cached("tmdb.getTmdbAiringTodaySeries", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/tv/airing_today"), "series").take(14)
+    }
 
-    suspend fun getTmdbTopRatedMovies(): List<MediaItem> =
+    suspend fun getTmdbTopRatedMovies(): List<MediaItem> = cached("tmdb.getTmdbTopRatedMovies", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/movie/top_rated"), "movie").take(14)
+    }
 
-    suspend fun getTmdbTopRatedSeries(): List<MediaItem> =
+    suspend fun getTmdbTopRatedSeries(): List<MediaItem> = cached("tmdb.getTmdbTopRatedSeries", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/tv/top_rated"), "series").take(14)
+    }
 
-    suspend fun getTmdbPopularMovies(): List<MediaItem> =
+    suspend fun getTmdbPopularMovies(): List<MediaItem> = cached("tmdb.getTmdbPopularMovies", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/movie/popular"), "movie").take(14)
+    }
 
-    suspend fun getTmdbPopularSeries(): List<MediaItem> =
+    suspend fun getTmdbPopularSeries(): List<MediaItem> = cached("tmdb.getTmdbPopularSeries", TtlCache.TMDB_TTL) {
         parseTmdbResults(fetchTmdbRaw("/tv/popular"), "series").take(14)
+    }
 
     // ── Backend Database Endpoints ──────────────────────────────────────────
 
