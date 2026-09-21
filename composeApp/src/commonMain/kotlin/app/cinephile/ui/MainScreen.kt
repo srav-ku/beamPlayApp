@@ -1504,6 +1504,14 @@ private fun BrowseTab(
 
     LaunchedEffect(kind, genre, language, exactYear, fromYear, toYear, retry) {
         if (retry > 0) kotlinx.coroutines.delay(200)
+        // Switching movies/TV or changing a filter must clear the old buffer and go
+        // back to the top, otherwise the previous list keeps showing.
+        buffer = emptyList()
+        items = emptyList()
+        visible = PAGE_SIZE_VISIBLE
+        nextPage = 1
+        endReached = false
+        runCatching { gridState.scrollToItem(0) }
         loadPage(1, replace = true)
     }
 
@@ -1512,7 +1520,7 @@ private fun BrowseTab(
     LaunchedEffect(gridState, buffer, visible, endReached) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
             .collect { last ->
-                if (loading || loadingMore || items.isEmpty()) return@collect
+                if (loading || loadingMore || items.isEmpty() || buffer.isEmpty()) return@collect
                 if (last >= items.size - 4) {
                     if (visible < buffer.size) {
                         // Already in memory: reveal more, no request.

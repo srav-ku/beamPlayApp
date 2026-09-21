@@ -24,6 +24,12 @@ import okio.Path.Companion.toPath
  */
 class CinephileApp : Application(), SingletonImageLoader.Factory {
 
+    override fun onCreate() {
+        super.onCreate()
+        // Paint from the last session immediately; anything past its TTL is ignored.
+        app.cinephile.data.TtlCache.hydrate()
+    }
+
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
             .diskCache {
