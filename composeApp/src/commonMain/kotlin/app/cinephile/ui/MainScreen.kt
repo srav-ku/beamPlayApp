@@ -305,7 +305,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
                     Tab.Search -> SearchTab(handleCardClick)
                     Tab.Library -> LibraryTab(handleCardClick)
-                    Tab.Profile -> ProfileTab(subtitleSettings, onResumeContinue)
+                    Tab.Profile -> ProfileTab(subtitleSettings, onResumeContinue, onBrowse = { tab = Tab.Browse; onTabChange(Tab.Browse) })
                 }
             }
 
@@ -2372,9 +2372,9 @@ private fun LibraryTab(onOpenMedia: (MediaItem) -> Unit) {
 
 /** Profile -> Settings -> Subtitle settings. */
 @Composable
-private fun ProfileTab(subtitleSettings: @Composable () -> Unit, onResumeContinue: (ContinueItem) -> Unit) {
+private fun ProfileTab(subtitleSettings: @Composable () -> Unit, onResumeContinue: (ContinueItem) -> Unit, onBrowse: () -> Unit) {
     // The whole profile lives in ProfileScreen; this keeps the tab wiring in one place.
-    ProfileScreen(subtitleSettings = subtitleSettings, onResumeContinue = onResumeContinue)
+    ProfileScreen(subtitleSettings = subtitleSettings, onResumeContinue = onResumeContinue, onBrowse = onBrowse)
 }
 
 /**

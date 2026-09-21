@@ -63,6 +63,7 @@ import app.cinephile.data.clearWatchHistory
 import app.cinephile.data.localWatchRecords
 import app.cinephile.data.nowMillis
 import app.cinephile.data.yearOfInstant
+import androidx.compose.material.icons.filled.Movie
 
 /**
  * Profile: who you are, what you have watched, and the switches that matter.
@@ -77,9 +78,13 @@ import app.cinephile.data.yearOfInstant
 fun ProfileScreen(
     subtitleSettings: @Composable () -> Unit = {},
     onResumeContinue: (ContinueItem) -> Unit = {},
+    onBrowse: () -> Unit = {},
 ) {
     val colors = Beam.colors
     val session = SessionManager.session.collectAsState().value
+    // A real paid plan - never the free fallback, or the badge would read "Premium"
+    // to somebody who has not paid for anything.
+    val isPremium = EntitlementsState.current?.plan?.code?.let { it != "free" } == true
 
     var tab by remember { mutableStateOf("Overview") }
     var showPremium by remember { mutableStateOf(false) }
@@ -90,6 +95,7 @@ fun ProfileScreen(
     var records by remember { mutableStateOf<List<WatchRecord>>(emptyList()) }
     var reload by remember { mutableStateOf(0) }
     var reviewPick by remember { mutableStateOf(-1) }
+    var bannerDismissed by remember { mutableStateOf(false) }
 
     CollectionsRepo.ensureLoaded()
 
@@ -144,9 +150,13 @@ fun ProfileScreen(
         LazyColumn(contentPadding = PaddingValues(bottom = 104.dp)) {
             item {
                 Spacer(Modifier.height(14.dp))
-                ProfileHeader(session) { showPremium = true }
-                Spacer(Modifier.height(16.dp))
+                ProfileHeader(session, isPremium) { showPremium = true }
+                Spacer(Modifier.height(24.dp))
                 ProfileTabs(current = tab) { tab = it }
+                if (!isPremium && !bannerDismissed && tab == "Overview") {
+                    Spacer(Modifier.height(16.dp))
+                    PremiumBanner(onOpen = { showPremium = true }, onDismiss = { bannerDismissed = true })
+                }
                 notice?.let { message ->
                     Spacer(Modifier.height(10.dp))
                     Text(
@@ -175,25 +185,29 @@ fun ProfileScreen(
                 "Year in Review" -> {
                     val currentYear = yearOfInstant(nowMillis())
                     val years = records.map { yearOfInstant(it.updatedAt) }.distinct().sortedDescending()
-                    yearInReview(records, years, currentYear, reviewPick) { reviewPick = it }
+                    yearInReview(records, years, currentYear, reviewPick, onBrowse) { reviewPick = it }
                 }
 
                 "Settings" -> {
-                    item { PremiumCard { showPremium = true } }
-                    item { SettingsRow("Subtitle settings", "Style, size and background of captions") { showSubtitleSettings = true } }
+                    item { PremiumCard(isPremium) { showPremium = true } }
                     item {
-                        SettingsRow("Clear image cache", "Reclaims space used by posters") {
-                            runCatching { clearImageCache() }
-                            notice = "Image cache cleared"
-                        }
-                    }
-                    item {
-                        SettingsRow("Clear watch history", "Removes Continue Watching and history") {
-                            confirmClearHistory = true
+                        SettingsCard("Playback & data") {
+                            SettingsRow("Subtitle settings", "Style, size and background of captions", divider = true) { showSubtitleSettings = true }
+                            SettingsRow("Clear image cache", "Reclaims space used by posters", divider = true) {
+                                runCatching { clearImageCache() }
+                                notice = "Image cache cleared"
+                            }
+                            SettingsRow("Clear watch history", "Removes Continue Watching and history", divider = false) {
+                                confirmClearHistory = true
+                            }
                         }
                     }
                     if (session != null) {
-                        item { SettingsRow("Sign out", session.email ?: "Signed in") { confirmSignOut = true } }
+                        item {
+                            SettingsCard("Account") {
+                                OutlinedAction("Sign out") { confirmSignOut = true }
+                            }
+                        }
                     }
                     item {
                         Spacer(Modifier.height(26.dp))
@@ -211,6 +225,10 @@ fun ProfileScreen(
                 else -> {
                     val completed = records.count { it.completed }
                     val watchedMs = records.sumOf { if (it.completed) it.durationMs else it.positionMs }
+                    if (records.isEmpty()) {
+                        // Four giant zeroes look broken; invite instead.
+                        item { ProfileWelcome() }
+                    } else {
                     item {
                         Column(Modifier.padding(horizontal = 16.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -224,8 +242,10 @@ fun ProfileScreen(
                             }
                         }
                     }
+                    }
 
-                    val collections = CollectionsRepo.ordered()
+                    // An empty list has nothing to report, so it is not reported.
+                    val collections = CollectionsRepo.ordered().filter { it.items.isNotEmpty() }
                     if (collections.isNotEmpty()) {
                         item {
                             SectionHead("Collections progress", Modifier.padding(horizontal = 16.dp))
@@ -296,7 +316,7 @@ fun ProfileScreen(
 /* ----------------------------- header + tabs ----------------------------- */
 
 @Composable
-private fun ProfileHeader(session: Session?, onUpgrade: () -> Unit) {
+private fun ProfileHeader(session: Session?, isPremium: Boolean, onUpgrade: () -> Unit) {
     val colors = Beam.colors
     val name = session?.displayName?.takeIf { it.isNotBlank() }
         ?: session?.email?.substringBefore('@')?.takeIf { it.isNotBlank() }
@@ -350,16 +370,15 @@ private fun ProfileHeader(session: Session?, onUpgrade: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(8.dp))
-            val active = EntitlementsState.canStream
             Text(
-                text = if (active) "Premium  ·  " + EntitlementsState.planName else "Upgrade to Premium",
-                color = if (active) colors.amber500 else colors.background,
+                text = if (isPremium) "Premium" else "Upgrade to Premium",
+                color = colors.background,
                 fontFamily = GeistMono,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(if (active) colors.amber500.copy(alpha = 0.12f) else colors.amber500)
+                    .background(colors.amber500)
                     .clickable { onUpgrade() }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
             )
@@ -621,6 +640,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearInReview(
     years: List<Int>,
     currentYear: Int,
     picked: Int,
+    onBrowse: () -> Unit,
     onPick: (Int) -> Unit,
 ) {
     val year = if (picked == -1) (years.firstOrNull() ?: currentYear) else picked
@@ -678,7 +698,46 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearInReview(
     }
 
     if (inYear.isEmpty()) {
-        item { ProfileEmpty("Nothing from " + year + " yet.") }
+        item {
+            // Fills the space a list would have used, so the screen reads as
+            // deliberately empty rather than unfinished.
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .fillParentMaxHeight(0.55f)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Movie,
+                    contentDescription = null,
+                    tint = Beam.colors.mutedForeground,
+                    modifier = Modifier.size(34.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "Nothing from " + year + " yet.",
+                    color = Beam.colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "Browse Movies",
+                    color = Beam.colors.background,
+                    fontFamily = GeistMono,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Beam.colors.amber500)
+                        .clickable { onBrowse() }
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                )
+            }
+        }
     } else {
         items(inYear, key = { it.title + it.updatedAt }) { record ->
             HistoryRow(record) { }
@@ -689,9 +748,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearInReview(
 /* -------------------------------- settings ------------------------------- */
 
 @Composable
-private fun PremiumCard(onUpgrade: () -> Unit) {
+private fun PremiumCard(isPremium: Boolean, onUpgrade: () -> Unit) {
     val colors = Beam.colors
-    val active = EntitlementsState.canStream
+    val active = isPremium
     Column(
         Modifier
             .fillMaxWidth()
@@ -735,8 +794,17 @@ private fun PremiumCard(onUpgrade: () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
+private fun SettingsRow(title: String, subtitle: String, divider: Boolean = false, onClick: () -> Unit) {
     val colors = Beam.colors
+    if (divider) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp)
+                .height(1.dp)
+                .background(colors.border),
+        )
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -872,4 +940,134 @@ private fun relativeTime(timestamp: Long): String {
     val months = days / 30L
     if (months < 12L) return months.toString() + "mo ago"
     return (months / 12L).toString() + "y ago"
+}
+
+/** No watch data yet: say so warmly instead of printing four zeroes. */
+@Composable
+private fun ProfileWelcome() {
+    val colors = Beam.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(colors.card)
+            .border(1.dp, colors.border, RoundedCornerShape(18.dp))
+            .padding(horizontal = 20.dp, vertical = 30.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Movie,
+            contentDescription = null,
+            tint = colors.mutedForeground,
+            modifier = Modifier.size(34.dp),
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "Start watching to see your stats here.",
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Dismissible upsell: present, never in the way. */
+@Composable
+private fun PremiumBanner(onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val colors = Beam.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(colors.amber500.copy(alpha = 0.10f))
+            .border(1.dp, colors.amber500.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Cinephile Premium",
+                color = colors.foreground,
+                fontFamily = Fraunces,
+                fontSize = 17.sp,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = "Stream instantly. Download at full speed. No ads.",
+                color = colors.mutedForeground,
+                fontFamily = GeistMono,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "See plans",
+                color = colors.background,
+                fontFamily = GeistMono,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.amber500)
+                    .clickable { onOpen() }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = "Dismiss",
+            tint = colors.mutedForeground,
+            modifier = Modifier
+                .size(16.dp)
+                .clickable { onDismiss() },
+        )
+    }
+}
+
+/** A titled card that groups related settings rows. */
+@Composable
+private fun SettingsCard(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val colors = Beam.colors
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(
+            text = title.uppercase(),
+            color = colors.mutedForeground,
+            fontFamily = Fraunces,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.card)
+                .border(1.dp, colors.border, RoundedCornerShape(18.dp))
+                .padding(vertical = 4.dp),
+            content = content,
+        )
+    }
+}
+
+/** Full-width outlined action, for things that deserve a real button. */
+@Composable
+private fun OutlinedAction(label: String, danger: Boolean = false, onClick: () -> Unit) {
+    val colors = Beam.colors
+    Text(
+        text = label,
+        color = colors.foreground,
+        fontFamily = GeistMono,
+        fontSize = 14.sp,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(50))
+            .border(1.dp, colors.border, RoundedCornerShape(50))
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
+    )
 }
