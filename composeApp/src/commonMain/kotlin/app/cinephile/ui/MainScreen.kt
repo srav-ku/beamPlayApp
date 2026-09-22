@@ -257,13 +257,15 @@ fun RequestModalDialog(
 }
 
 @Composable
-fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}, onTabChange: (Tab) -> Unit = {}) {
+fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}, onTabChange: (Tab) -> Unit = {}, onOpenPerson: (Long) -> Unit = {}) {
     var tab by remember { mutableStateOf(initialTab) }
     // Report the active tab so returning from a detail screen lands back here,
     // on the same tab, instead of resetting to Home.
     LaunchedEffect(tab) { onTabChange(tab) }
     // True while a full-screen sheet (e.g. browse filters) owns the screen.
     var overlayOpen by remember { mutableStateOf(false) }
+    // Search is an overlay, not a tab: the screen behind it never moves.
+    var searchOpen by remember { mutableStateOf(false) }
     var requestItem by remember { mutableStateOf<MediaItem?>(null) }
     var isCheckingDb by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -299,7 +301,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
             // Clearance for the floating bar only when no sheet is covering the screen.
             Box(Modifier.weight(1f).padding(bottom = if (overlayOpen) 0.dp else 78.dp)) {
                 when (tab) {
-                    Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { tab = Tab.Search }, onResumeContinue = onResumeContinue)
+                    Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { searchOpen = true }, onResumeContinue = onResumeContinue)
                     Tab.Browse -> BrowseTab(handleCardClick, onOverlayChange = { overlayOpen = it })
                     Tab.Movies -> CatalogTab(kind = "movies", handleCardClick)
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
@@ -309,6 +311,14 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
                 }
             }
 
+        }
+
+        if (searchOpen) {
+            SearchOverlay(
+                onDismiss = { searchOpen = false },
+                onOpenMedia = handleCardClick,
+                onOpenPerson = onOpenPerson,
+            )
         }
 
         // Hidden while a full-screen sheet is open, so the sheet owns the screen.

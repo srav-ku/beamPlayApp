@@ -258,6 +258,10 @@ private fun AppNavHost() {
         current == null -> MainScreen(
             initialTab = mainTab,
             onTabChange = { mainTab = it },
+            onOpenPerson = { id ->
+                personId = id
+                detailFromPerson = false
+            },
             onOpenMedia = { backStack = backStack + it },
             subtitleSettings = { BeamSubtitleSettingsScreen() },
             onResumeContinue = { ci ->

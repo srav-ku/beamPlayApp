@@ -1,6 +1,7 @@
 package app.cinephile.data
 
 import io.ktor.client.plugins.HttpTimeout
+import app.cinephile.data.SearchJson
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.delay
 import app.cinephile.core.network.servicesOrNull
@@ -186,6 +187,21 @@ object Api {
         return person
     }
 
+    /**
+     * Live multi-search for the overlay: titles and people in one call, so the
+     * suggestions and the results page always agree.
+     */
+    suspend fun searchMulti(q: String): List<TmdbSearchItem> {
+        if (q.isBlank()) return emptyList()
+        return try {
+            val raw = fetchTmdbRaw("/search/multi?query=" + q.trim().replace(" ", "%20"))
+            SearchJson.decodeFromString(TmdbSearchPage.serializer(), raw).results
+        } catch (e: Exception) {
+            println("Search failed: ${e.message}")
+            emptyList()
+        }
+    }
+
     // ── Backend Database Endpoints ──────────────────────────────────────────
 
     suspend fun getMovieByTmdb(tmdbId: Long): MediaItem? {
@@ -298,3 +314,4 @@ object Api {
         authToken?.let { header("Authorization", "Bearer $it") }
     }.body()
 }
+
