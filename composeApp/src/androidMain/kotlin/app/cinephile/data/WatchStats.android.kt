@@ -41,3 +41,17 @@ actual fun clearImageCache() {
 
 actual fun yearOfInstant(ms: Long): Int =
     Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).year
+
+actual fun shareText(text: String) {
+    val context = ctx() ?: return
+    runCatching {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, text)
+        }
+        val chooser = android.content.Intent.createChooser(send, "Share").apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
+    }
+}

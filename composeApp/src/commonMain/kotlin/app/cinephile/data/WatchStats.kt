@@ -43,3 +43,6 @@ expect fun clearImageCache()
 
 /** Calendar year of an instant, so history can be grouped by year. */
 expect fun yearOfInstant(ms: Long): Int
+
+/** Hands a title and link to the platform share sheet. */
+expect fun shareText(text: String)
