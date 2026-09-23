@@ -64,6 +64,7 @@ import app.cinephile.data.localWatchRecords
 import app.cinephile.data.nowMillis
 import app.cinephile.data.yearOfInstant
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.foundation.layout.aspectRatio
 
 /**
  * Profile: who you are, what you have watched, and the switches that matter.
@@ -174,25 +175,23 @@ fun ProfileScreen(
             when (tab) {
                 "History" -> {
                     // Titles marked watched by hand belong here too, not just played ones.
-                    val marks = app.cinephile.data.TitleFlags.manualWatched.filter { mark -> records.none { it.title == mark } }
+                    val marks = app.cinephile.data.TitleFlags.manualWatched.filter { mark -> records.none { it.title == mark.title } }
                     if (marks.isNotEmpty()) {
                         item {
-                            Column(Modifier.padding(horizontal = 16.dp)) {
-                                SectionHead("Marked watched")
-                                Spacer(Modifier.height(8.dp))
-                                marks.forEach { mark ->
-                                    Text(
-                                        text = mark,
-                                        color = Beam.colors.foreground,
-                                        fontFamily = GeistMono,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.padding(vertical = 3.dp),
-                                    )
+                            Column {
+                                Column(Modifier.padding(horizontal = 16.dp)) { SectionHead("Marked watched") }
+                                Spacer(Modifier.height(10.dp))
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    items(marks, key = { it.tmdbId }) { mark -> MarkCard(mark) }
                                 }
+                                Spacer(Modifier.height(6.dp))
                             }
                         }
                     }
-                    if (records.isEmpty()) {
+                    if (records.isEmpty() && marks.isEmpty()) {
                         item { ProfileEmpty("Nothing watched yet. Press play on any title and it lands here.") }
                     } else {
                         item { ProfileClearRow("History") { confirmClearHistory = true } }
@@ -243,7 +242,8 @@ fun ProfileScreen(
                 }
 
                 else -> {
-                    val completed = records.count { it.completed }
+                    val markCount = app.cinephile.data.TitleFlags.manualWatched.count { mark -> records.none { it.title == mark.title } }
+                    val completed = records.count { it.completed } + markCount
                     val watchedMs = records.sumOf { if (it.completed) it.durationMs else it.positionMs }
                     if (records.isEmpty()) {
                         // Four giant zeroes look broken; invite instead.
@@ -252,7 +252,7 @@ fun ProfileScreen(
                     item {
                         Column(Modifier.padding(horizontal = 16.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                StatTile("Titles", records.size.toString(), Modifier.weight(1f))
+                                StatTile("Titles", (records.size + markCount).toString(), Modifier.weight(1f))
                                 StatTile("Watch time", humanDuration(watchedMs), Modifier.weight(1f))
                             }
                             Spacer(Modifier.height(12.dp))
@@ -665,6 +665,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearInReview(
 ) {
     val year = if (picked == -1) (years.firstOrNull() ?: currentYear) else picked
     val inYear = records.filter { yearOfInstant(it.updatedAt) == year }
+    // Hand-marked titles count towards the year they were marked in.
+    val markedInYear = app.cinephile.data.TitleFlags.manualWatched.count {
+        yearOfInstant(it.markedAt) == year && records.none { r -> r.title == it.title }
+    }
     val hours = inYear.sumOf { if (it.completed) it.durationMs else it.positionMs }
 
     item {
@@ -705,12 +709,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearInReview(
     item {
         Column(Modifier.padding(horizontal = 16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatTile("Titles", inYear.size.toString(), Modifier.weight(1f))
+                StatTile("Titles", (inYear.size + markedInYear).toString(), Modifier.weight(1f))
                 StatTile("Hours", humanDuration(hours), Modifier.weight(1f))
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatTile("Finished", inYear.count { it.completed }.toString(), Modifier.weight(1f))
+                StatTile("Finished", (inYear.count { it.completed } + markedInYear).toString(), Modifier.weight(1f))
                 StatTile("Avg", if (inYear.isEmpty()) "-" else humanDuration(hours / inYear.size), Modifier.weight(1f))
             }
             Spacer(Modifier.height(20.dp))
@@ -1090,4 +1094,50 @@ private fun OutlinedAction(label: String, danger: Boolean = false, onClick: () -
             .clickable { onClick() }
             .padding(vertical = 12.dp),
     )
+}
+
+/** A hand-marked title, shown as the same portrait card Browse uses. */
+@Composable
+private fun MarkCard(mark: app.cinephile.data.WatchMark) {
+    val colors = Beam.colors
+    Column(Modifier.width(112.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.card)
+                .border(1.dp, colors.border, RoundedCornerShape(10.dp)),
+        ) {
+            val art = Api.posterUrl(mark.posterPath, "w342")
+            if (art != null) {
+                AsyncImage(
+                    model = art,
+                    contentDescription = mark.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = mark.title,
+            color = colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 12.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = buildString {
+                mark.rating?.takeIf { it > 0 }?.let { append("\u2605 ").append(it.toString().take(3)) }
+                mark.year?.let { if (isNotEmpty()) append("  ·  "); append(it) }
+            },
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 11.sp,
+            maxLines = 1,
+        )
+    }
 }

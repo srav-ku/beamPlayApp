@@ -248,7 +248,14 @@ fun BeamDetailScreen(
     LaunchedEffect(favorite, watched) {
         val key = item.tmdb_id ?: item.id
         TitleFlags.setLiked(key, favorite)
-        TitleFlags.setWatched(key, watched, item.title)
+        TitleFlags.setWatched(
+            id = key,
+            watched = watched,
+            title = item.title,
+            posterPath = item.poster_path,
+            year = item.year,
+            rating = item.tmdb_rating,
+        )
     }
 
     var resolving by remember { mutableStateOf(false) }

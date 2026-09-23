@@ -332,7 +332,7 @@ private fun AppNavHost() {
                         .padding(18.dp),
                 ) {
                     Text(
-                        text = if (requestSent) "Request sent" else "Not in the library yet",
+                        text = if (requestSent) "Request sent" else "Not Available",
                         color = Beam.colors.foreground,
                         fontFamily = GeistMono,
                         fontSize = 15.sp,
@@ -341,9 +341,9 @@ private fun AppNavHost() {
                     androidx.compose.foundation.layout.Spacer(Modifier.height(6.dp))
                     Text(
                         text = if (requestSent) {
-                            "We will add " + missing.title + " as soon as it is available."
+                            "Request received for " + missing.title + "."
                         } else {
-                            missing.title + " is not in the catalogue. Ask for it and it lands here once it is added."
+                            "\u0022" + missing.title + "\u0022 is not available. Send a request to add it"
                         },
                         color = Beam.colors.mutedForeground,
                         fontFamily = GeistMono,
