@@ -202,6 +202,8 @@ private fun AppNavHost() {
     var playback by remember { mutableStateOf<PlaybackRequest?>(null) }
     // Last tab the user was on, so back from a detail screen returns there.
     var mainTab by remember { mutableStateOf(app.cinephile.ui.Tab.Home) }
+    // Which half of Browse the user was in, so returning lands back there.
+    var browseKind by remember { mutableStateOf("movies") }
     // A person page sits alongside the detail stack; detailFromPerson remembers that
     // the current title was opened from someone's filmography, so back returns there.
     var personId by remember { mutableStateOf<Long?>(null) }
@@ -258,6 +260,8 @@ private fun AppNavHost() {
         current == null -> MainScreen(
             initialTab = mainTab,
             onTabChange = { mainTab = it },
+            browseKind = browseKind,
+            onBrowseKindChange = { browseKind = it },
             onOpenPerson = { id ->
                 personId = id
                 detailFromPerson = false

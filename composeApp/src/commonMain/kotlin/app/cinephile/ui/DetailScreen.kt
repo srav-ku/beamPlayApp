@@ -345,7 +345,7 @@ fun BeamDetailScreen(
 
     LaunchedEffect(item.id) {
 
-        val result = runCatching { servicesOrNull?.beamApi?.getMovieLinks(item.id) }.getOrNull()
+        val result = if (isSeries) null else runCatching { servicesOrNull?.beamApi?.getMovieLinks(item.id) }.getOrNull()
 
         sources = result?.items ?: emptyList()
 
@@ -465,7 +465,7 @@ fun BeamDetailScreen(
 
                                 app.cinephile.core.network.servicesOrNull?.beamApi
 
-                                    ?.getDownloadOptions("movie", item.id)
+                                    ?.getDownloadOptions(if (isSeries) "series" else "movie", item.id)
 
                             }.getOrNull()?.items ?: emptyList()
 

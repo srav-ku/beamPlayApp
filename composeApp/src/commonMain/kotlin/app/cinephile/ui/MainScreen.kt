@@ -257,7 +257,7 @@ fun RequestModalDialog(
 }
 
 @Composable
-fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}, onTabChange: (Tab) -> Unit = {}, onOpenPerson: (Long) -> Unit = {}) {
+fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, subtitleSettings: @Composable () -> Unit = {}, onResumeContinue: (ContinueItem) -> Unit = {}, onTabChange: (Tab) -> Unit = {}, onOpenPerson: (Long) -> Unit = {}, browseKind: String = "movies", onBrowseKindChange: (String) -> Unit = {}) {
     var tab by remember { mutableStateOf(initialTab) }
     // Report the active tab so returning from a detail screen lands back here,
     // on the same tab, instead of resetting to Home.
@@ -302,7 +302,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
             Box(Modifier.weight(1f).padding(bottom = if (overlayOpen) 0.dp else 78.dp)) {
                 when (tab) {
                     Tab.Home -> HomeTab(handleCardClick, onOpenSearch = { searchOpen = true }, onResumeContinue = onResumeContinue)
-                    Tab.Browse -> BrowseTab(handleCardClick, onOverlayChange = { overlayOpen = it })
+                    Tab.Browse -> BrowseTab(handleCardClick, onOverlayChange = { overlayOpen = it }, initialKind = browseKind, onKindChange = onBrowseKindChange)
                     Tab.Movies -> CatalogTab(kind = "movies", handleCardClick)
                     Tab.Series -> CatalogTab(kind = "series", handleCardClick)
                     Tab.Search -> SearchTab(handleCardClick)
@@ -1431,8 +1431,13 @@ private fun CatalogTab(kind: String, onOpenMedia: (MediaItem) -> Unit) {
 private fun BrowseTab(
     onOpenMedia: (MediaItem) -> Unit,
     onOverlayChange: (Boolean) -> Unit = {},
+    initialKind: String = "movies",
+    onKindChange: (String) -> Unit = {},
 ) {
-    var kind by remember { mutableStateOf("movies") }
+    // Movies/TV survives opening a title and coming back, so Back lands on the
+    // list you were actually browsing.
+    var kind by remember(initialKind) { mutableStateOf(initialKind) }
+    LaunchedEffect(kind) { onKindChange(kind) }
 
     // Buffered paging: one request brings PAGE_SIZE_FETCH titles, the grid reveals
     // them PAGE_SIZE_VISIBLE at a time purely from memory, and the buffer is cached

@@ -47,6 +47,8 @@ import app.cinephile.core.ui.theme.Beam
 import app.cinephile.core.ui.theme.GeistMono
 import app.cinephile.core.ui.theme.Inter
 import app.cinephile.core.ui.theme.PillShape
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 
 /**
  * Centred modal card with a dimmed backdrop — matching the website's
@@ -286,8 +288,13 @@ fun SourcesSheet(
 }
 
 /**
- * "Download" — files grouped by quality, each with a circular action, plus the
- * website's Telegram footer note.
+ * "Download" - quality and audio chosen from vertical radio lists, then one
+ * button.
+ *
+ * The old version put the options in wrapping chips (where "1080p WEB-DL x264"
+ * was clipped to "720") and then listed the same files again underneath. Here the
+ * options *are* the selection: full-width rows, nothing truncated, and a single
+ * confirmation.
  */
 @Composable
 fun DownloadsSheet(
@@ -295,36 +302,25 @@ fun DownloadsSheet(
     files: List<DownloadFile>,
     loading: Boolean,
     onDismiss: () -> Unit,
+    onStart: (DownloadFile) -> Unit = {},
 ) {
     val colors = Beam.colors
-    var hint by remember { mutableStateOf(false) }
-    // Same filter language as the stream popup: quality and audio language.
-    var quality by remember { mutableStateOf("") }
-    var language by remember { mutableStateOf("") }
-
     val qualities = remember(files) { files.map { it.quality }.filter { it.isNotBlank() }.distinct() }
-    val languages = remember(files) {
+    val audios = remember(files) {
         files.flatMap { it.audioLanguageList() }.filter { it.isNotBlank() }.distinct()
     }
-    val visible = files.filter { file ->
-        (quality.isBlank() || file.quality == quality) &&
-            (language.isBlank() || file.audioLanguageList().contains(language))
-    }
+    var quality by remember(files) { mutableStateOf(qualities.firstOrNull() ?: "") }
+    var audio by remember(files) { mutableStateOf(audios.firstOrNull() ?: "") }
 
     CenterModal(
         icon = Icons.Filled.Download,
         title = "Download",
         subtitle = title,
         onDismiss = onDismiss,
-        footer = if (hint) {
-            "Files are delivered via Telegram. Tap an option to open the BEAM bot and receive your file."
-        } else {
-            null
-        },
     ) {
         when {
             loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                CircularProgressIndicator(color = colors.amber500, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("Fetching files", color = colors.mutedForeground, fontFamily = GeistMono, fontSize = 12.sp)
             }
@@ -336,86 +332,171 @@ fun DownloadsSheet(
                 fontSize = 12.sp,
             )
 
-            else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (qualities.isNotEmpty()) ChipRow("QUALITY", qualities, quality) { quality = it }
-                if (languages.isNotEmpty()) ChipRow("AUDIO", languages, language) { language = it }
-                visible.forEach { file ->
-                    val langs = file.audioLanguageList().joinToString(", ")
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(colors.card)
-                            .border(1.dp, colors.border, RoundedCornerShape(14.dp))
-                            .clickable { hint = true }
-                            .padding(horizontal = 13.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colors.amber500.copy(alpha = 0.16f))
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                        ) {
-                            Text(
-                                text = file.quality.ifBlank { "File" },
-                                color = colors.amber500,
-                                fontFamily = GeistMono,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
+            else -> Column(Modifier.fillMaxWidth()) {
+                if (qualities.isNotEmpty()) {
+                    OptionLabel("QUALITY")
+                    OptionCard {
+                        qualities.forEachIndexed { index, label ->
+                            if (index > 0) OptionDivider()
+                            val size = files.firstOrNull { it.quality == label }?.file_size
+                            OptionRow(
+                                label = label,
+                                trailing = size?.takeIf { it > 0 }?.let { humanSize(it) },
+                                selected = label == quality,
+                                onSelect = { quality = label },
                             )
-                        }
-                        Spacer(Modifier.width(11.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = file.file_name,
-                                color = colors.foreground,
-                                fontFamily = GeistMono,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            val meta = buildList {
-                                if (langs.isNotBlank()) add(langs)
-                                if (file.hasSubtitles) add("Subs")
-                                file.file_size?.takeIf { it > 0 }?.let { add(humanSize(it)) }
-                            }.joinToString("  \u2022  ")
-                            if (meta.isNotBlank()) {
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = meta,
-                                    color = colors.mutedForeground,
-                                    fontFamily = GeistMono,
-                                    fontSize = 10.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            Modifier.size(34.dp).clip(CircleShape).background(colors.amber500),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Filled.Download, null, tint = colors.background, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
 
-                if (!hint) {
+                if (audios.isNotEmpty()) {
+                    OptionLabel("AUDIO")
+                    OptionCard {
+                        audios.forEachIndexed { index, label ->
+                            if (index > 0) OptionDivider()
+                            OptionRow(
+                                label = label,
+                                trailing = null,
+                                selected = label == audio,
+                                onSelect = { audio = label },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(colors.amber500)
+                        .clickable {
+                            val pick = files.firstOrNull {
+                                (quality.isBlank() || it.quality == quality) &&
+                                    (audio.isBlank() || it.audioLanguageList().contains(audio))
+                            } ?: files.firstOrNull()
+                            if (pick != null) onStart(pick)
+                        },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Download,
+                        contentDescription = null,
+                        tint = colors.background,
+                        modifier = Modifier.size(19.dp),
+                    )
+                    Spacer(Modifier.width(9.dp))
                     Text(
-                        text = "Files are delivered via Telegram. Tap an option to open the BEAM bot and receive your file.",
-                        color = colors.mutedForeground,
+                        text = "Start Download",
+                        color = colors.background,
                         fontFamily = GeistMono,
-                        fontSize = 10.sp,
-                        lineHeight = 15.sp,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "Files are delivered through Telegram, so the transfer survives a closed app.",
+                    color = colors.mutedForeground,
+                    fontFamily = GeistMono,
+                    fontSize = 11.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
 }
+
+@Composable
+private fun OptionLabel(text: String) {
+    Text(
+        text = text,
+        color = Beam.colors.mutedForeground,
+        fontFamily = GeistMono,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+    )
+}
+
+/** Grouping card: page colour inside the sheet's card colour, like the spec. */
+@Composable
+private fun OptionCard(content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Beam.colors.background)
+            .border(1.dp, Beam.colors.border, RoundedCornerShape(12.dp)),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun OptionDivider() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp)
+            .height(1.dp)
+            .background(Beam.colors.border),
+    )
+}
+
+@Composable
+private fun OptionRow(
+    label: String,
+    trailing: String?,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    val colors = Beam.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = null,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = colors.amber500,
+                unselectedColor = colors.mutedForeground,
+            ),
+            modifier = Modifier.size(36.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = label,
+            color = colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.let {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = it,
+                color = colors.mutedForeground,
+                fontFamily = GeistMono,
+                fontSize = 13.sp,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 
 private fun humanSize(bytes: Long): String {
     val gb = bytes / 1_073_741_824.0
