@@ -205,7 +205,7 @@ fun BeamDetailScreen(
 
     val tmdbId = item.tmdb_id ?: 0L
 
-    val isSeries = item.type == "series"
+    val isSeries = item.type == "series" || item.total_seasons != null
 
     var credits by remember { mutableStateOf<TmdbCredits?>(null) }
 
@@ -1561,7 +1561,7 @@ private fun HeroCard(
     onTrailer: () -> Unit = {},
 ) {
     val colors = Beam.colors
-    val isSeries = item.type == "series"
+    val isSeries = item.type == "series" || item.total_seasons != null
 
     Column(Modifier.fillMaxWidth()) {
         // ---- 1. the backdrop, and nothing else ----

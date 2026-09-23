@@ -277,7 +277,7 @@ fun MainScreen(initialTab: Tab = Tab.Home, onOpenMedia: (MediaItem) -> Unit, sub
         } else if (item.tmdb_id != null) {
             scope.launch {
                 isCheckingDb = true
-                val inDb = if (item.type == "series") Api.getSeriesByTmdb(item.tmdb_id) else Api.getMovieByTmdb(item.tmdb_id)
+                val inDb = if (item.type == "series" || item.total_seasons != null) Api.getSeriesByTmdb(item.tmdb_id) else Api.getMovieByTmdb(item.tmdb_id)
                 isCheckingDb = false
                 if (inDb != null && inDb.id > 0) {
                     onOpenMedia(inDb)
