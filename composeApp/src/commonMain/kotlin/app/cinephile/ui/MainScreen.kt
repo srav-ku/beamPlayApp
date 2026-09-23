@@ -1722,7 +1722,7 @@ private fun BrowseTab(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Add to Collection",
+                    text = "Add to Lists",
                     color = colors.background,
                     fontFamily = GeistMono,
                     fontSize = 13.sp,

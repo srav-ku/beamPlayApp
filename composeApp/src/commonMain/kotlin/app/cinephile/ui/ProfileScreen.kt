@@ -98,6 +98,7 @@ fun ProfileScreen(
     var bannerDismissed by remember { mutableStateOf(false) }
 
     CollectionsRepo.ensureLoaded()
+    app.cinephile.data.TitleFlags.ensureLoaded()
 
     // Re-read on every visit and after a clear, so the numbers never lie.
     LaunchedEffect(reload) { records = runCatching { localWatchRecords() }.getOrDefault(emptyList()) }
@@ -172,6 +173,25 @@ fun ProfileScreen(
 
             when (tab) {
                 "History" -> {
+                    // Titles marked watched by hand belong here too, not just played ones.
+                    val marks = app.cinephile.data.TitleFlags.manualWatched.filter { mark -> records.none { it.title == mark } }
+                    if (marks.isNotEmpty()) {
+                        item {
+                            Column(Modifier.padding(horizontal = 16.dp)) {
+                                SectionHead("Marked watched")
+                                Spacer(Modifier.height(8.dp))
+                                marks.forEach { mark ->
+                                    Text(
+                                        text = mark,
+                                        color = Beam.colors.foreground,
+                                        fontFamily = GeistMono,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(vertical = 3.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
                     if (records.isEmpty()) {
                         item { ProfileEmpty("Nothing watched yet. Press play on any title and it lands here.") }
                     } else {
@@ -248,7 +268,7 @@ fun ProfileScreen(
                     val collections = CollectionsRepo.ordered().filter { it.items.isNotEmpty() }
                     if (collections.isNotEmpty()) {
                         item {
-                            SectionHead("Collections progress", Modifier.padding(horizontal = 16.dp))
+                            SectionHead("Lists progress", Modifier.padding(horizontal = 16.dp))
                             Spacer(Modifier.height(10.dp))
                         }
                         items(collections, key = { it.id }) { collection ->

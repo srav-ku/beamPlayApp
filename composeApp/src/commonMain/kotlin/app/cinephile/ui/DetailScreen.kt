@@ -248,7 +248,7 @@ fun BeamDetailScreen(
     LaunchedEffect(favorite, watched) {
         val key = item.tmdb_id ?: item.id
         TitleFlags.setLiked(key, favorite)
-        TitleFlags.setWatched(key, watched)
+        TitleFlags.setWatched(key, watched, item.title)
     }
 
     var resolving by remember { mutableStateOf(false) }
@@ -584,7 +584,7 @@ fun BeamDetailScreen(
                     Spacer(Modifier.height(24.dp))
 
 
-                        androidx.compose.foundation.layout.FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
 
                     ) {
 
@@ -612,7 +612,7 @@ fun BeamDetailScreen(
 
                         )
 
-                        moneyCards.forEach { card ->
+                        moneyCards.distinctBy { it.first }.forEach { card ->
 
                             RatingCard(
 
@@ -633,28 +633,6 @@ fun BeamDetailScreen(
                                     Color.Unspecified
 
                                 },
-
-                                modifier = Modifier.weight(1f),
-
-                            )
-
-                        }
-
-                        if (budget != null && revenue != null) {
-
-                            val profit = revenue - budget
-
-                            RatingCard(
-
-                                label = "Profit",
-
-                                value = (if (profit >= 0) "+$" else "-$") + money(if (profit >= 0) profit else -profit),
-
-                                star = false,
-
-                                compact = true,
-
-                                tint = if (profit >= 0) Color(0xFF10B981) else Color(0xFFEF4444),
 
                                 modifier = Modifier.weight(1f),
 
@@ -782,7 +760,7 @@ fun BeamDetailScreen(
         // ---- Your review: five stars at a size you can actually aim at ----
         item { ReviewCard(myRating) { myRating = it } }
 
-        // ---- In Your Collections: the lists that already hold this title ----
+        // ---- In Your Lists: the lists that already hold this title ----
 
         val inCollections = CollectionsRepo.collectionsWith(item.tmdb_id ?: item.id)
 
@@ -908,53 +886,22 @@ fun BeamDetailScreen(
 
                         itemsIndexed(moreLike.take(14)) { _, rec ->
 
-                            RailCard(
-
-                                title = rec.displayTitle,
-
-                                backdropPath = rec.backdrop_path,
-
-                                posterPath = rec.poster_path,
-
-                                rating = rec.vote_average,
-
-                                year = rec.displayYear.take(4).toIntOrNull(),
-
-                                modifier = Modifier.fillParentMaxWidth(0.82f),
-
-                                onClick = {
-
+                            RecPosterCard(rec) {
                                     onOpenMedia(
-
                                         MediaItem(
-
                                             id = 0,
-
                                             tmdb_id = rec.id,
-
                                             title = rec.displayTitle,
-
                                             overview = rec.overview,
-
                                             poster_path = rec.poster_path,
-
                                             backdrop_path = rec.backdrop_path,
-
                                             release_year = rec.displayYear.take(4).toIntOrNull(),
-
                                             first_release_year = rec.displayYear.take(4).toIntOrNull(),
-
                                             tmdb_rating = rec.vote_average,
-
-                                            type = if (rec.isMovie) "movie" else "series",
-
+                                            type = item.type,
                                         ),
-
                                     )
-
-                                },
-
-                            )
+                                }
 
                         }
 
@@ -2505,3 +2452,52 @@ private fun RailCard(
 
 }
 
+/** Portrait card for More Like This - the same shape Browse uses. */
+@Composable
+private fun RecPosterCard(rec: app.cinephile.core.model.TmdbItem, onClick: () -> Unit) {
+    val colors = Beam.colors
+    Column(
+        Modifier
+            .width(112.dp)
+            .clickable { onClick() },
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.card)
+                .border(1.dp, colors.border, RoundedCornerShape(10.dp)),
+        ) {
+            Api.posterUrl(rec.poster_path, "w342")?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = rec.displayTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = rec.displayTitle,
+            color = colors.foreground,
+            fontFamily = GeistMono,
+            fontSize = 12.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = buildString {
+                rec.vote_average?.takeIf { it > 0 }?.let { append("\u2605 ").append(fmt1(it)) }
+                val year = rec.displayYear.take(4)
+                if (year.isNotBlank()) { if (isNotEmpty()) append("  ·  "); append(year) }
+            },
+            color = colors.mutedForeground,
+            fontFamily = GeistMono,
+            fontSize = 11.sp,
+            maxLines = 1,
+        )
+    }
+}

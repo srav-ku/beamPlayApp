@@ -883,7 +883,7 @@ fun CollItem.toMediaItem(): MediaItem = MediaItem(
 )
 
 /**
- * "Add to Collections" picker: tick several lists at once, or create one inline.
+ * "Add to Lists" picker: tick several lists at once, or create one inline.
  * Reached from the detail page's My List button (and later from Browse's
  * multi-select).
  */
@@ -918,7 +918,7 @@ fun CollectionPickerModal(
                 // Plain sans header: the serif belongs to editorial titles, not chrome.
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Add " + items.size + " item" + (if (items.size == 1) "" else "s") + " to Collections",
+                        text = "Add " + items.size + " item" + (if (items.size == 1) "" else "s") + " to Lists",
                         color = colors.foreground,
                         fontFamily = GeistMono,
                         fontSize = 14.sp,
@@ -1070,7 +1070,7 @@ fun CollectionPickerModal(
                     ) {
                         Text(
                             text = if (selected.isEmpty()) {
-                                "Add to Collection"
+                                "Add to Lists"
                             } else {
                                 "Add to " + selected.size + " List" + (if (selected.size == 1) "" else "s")
                             },

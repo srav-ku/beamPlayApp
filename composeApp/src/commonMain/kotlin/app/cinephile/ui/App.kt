@@ -64,6 +64,7 @@ import app.cinephile.data.SessionManager
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.graphics.graphicsLayer
 import app.cinephile.core.ui.theme.Fraunces
+import app.cinephile.core.ui.theme.Beam
 
 @Composable
 fun App(sessionStore: app.cinephile.data.SessionStore) {
@@ -204,6 +205,10 @@ private fun AppNavHost() {
     var mainTab by remember { mutableStateOf(app.cinephile.ui.Tab.Home) }
     // Which half of Browse the user was in, so returning lands back there.
     var browseKind by remember { mutableStateOf("movies") }
+    // Titles opened from a detail page that are not in the library: ask instead of
+    // pushing an empty detail screen.
+    var pendingRequest by remember { mutableStateOf<app.cinephile.data.MediaItem?>(null) }
+    var requestSent by remember { mutableStateOf(false) }
     // A person page sits alongside the detail stack; detailFromPerson remembers that
     // the current title was opened from someone's filmography, so back returns there.
     var personId by remember { mutableStateOf<Long?>(null) }
@@ -225,6 +230,24 @@ private fun AppNavHost() {
         }
     }
 
+    // Detail-page taps go through the library check first, like the tabs do.
+    fun openChecked(media: app.cinephile.data.MediaItem, fromPerson: Boolean) {
+        scope.launch {
+            val inDb = runCatching {
+                val tmdb = media.tmdb_id ?: 0L
+                if (media.type == "series" || media.total_seasons != null) app.cinephile.data.Api.getSeriesByTmdb(tmdb)
+                else app.cinephile.data.Api.getMovieByTmdb(tmdb)
+            }.getOrNull()
+            if (inDb != null) {
+                backStack = backStack + inDb
+                detailFromPerson = fromPerson
+            } else {
+                requestSent = false
+                pendingRequest = media
+            }
+        }
+    }
+
     // Premium state: fetched once per launch, cached, never blocking the UI.
     androidx.compose.runtime.LaunchedEffect(Unit) {
         app.cinephile.core.network.servicesOrNull?.beamApi?.let {
@@ -235,7 +258,8 @@ private fun AppNavHost() {
     val current = backStack.lastOrNull()
 
     when {
-                request != null -> {
+
+    request != null -> {
             androidx.compose.runtime.LaunchedEffect(request.url) { rememberContinueArt(request.resumeKey.ifBlank { request.url }, request.art) }
             BeamPlayerScreen(
             title = request.title,
@@ -251,10 +275,7 @@ private fun AppNavHost() {
         personId != null && !detailFromPerson -> PersonScreen(
             personId = personId ?: 0L,
             onClose = { personId = null },
-            onOpenMedia = { media ->
-                backStack = backStack + media
-                detailFromPerson = true
-            },
+            onOpenMedia = { media -> openChecked(media, fromPerson = true) },
         )
 
         current == null -> MainScreen(
@@ -291,7 +312,7 @@ private fun AppNavHost() {
         else -> BeamDetailScreen(
             item = current,
             onBack = { backStack = backStack.dropLast(1) },
-            onOpenMedia = { backStack = backStack + it },
+            onOpenMedia = { openChecked(it, fromPerson = false) },
             onOpenPerson = { id ->
                 personId = id
                 detailFromPerson = false
@@ -299,6 +320,79 @@ private fun AppNavHost() {
             onPlay = { url, subs, src -> playback = PlaybackRequest(current.title, url, subs, current.backdrop_path ?: current.poster_path, src) },
         )
     }
+            
+        // Not in the library: offer to request it, exactly like Home does.
+        val missing = pendingRequest
+        if (missing != null) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { pendingRequest = null }) {
+                androidx.compose.foundation.layout.Column(
+                    Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+                        .background(Beam.colors.card)
+                        .padding(18.dp),
+                ) {
+                    Text(
+                        text = if (requestSent) "Request sent" else "Not in the library yet",
+                        color = Beam.colors.foreground,
+                        fontFamily = GeistMono,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = if (requestSent) {
+                            "We will add " + missing.title + " as soon as it is available."
+                        } else {
+                            missing.title + " is not in the catalogue. Ask for it and it lands here once it is added."
+                        },
+                        color = Beam.colors.mutedForeground,
+                        fontFamily = GeistMono,
+                        fontSize = 12.sp,
+                    )
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
+                    androidx.compose.foundation.layout.Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+                    ) {
+                        Text(
+                            text = "Close",
+                            color = Beam.colors.mutedForeground,
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .clickable { pendingRequest = null }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                        if (!requestSent) {
+                            androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = "Request",
+                                color = Beam.colors.background,
+                                fontFamily = GeistMono,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                    .background(Beam.colors.amber500)
+                                    .clickable {
+                                        scope.launch {
+                                            runCatching {
+                                                app.cinephile.data.Api.submitRequest(
+                                                    missing.title,
+                                                    missing.tmdb_id,
+                                                    if (missing.type == "series" || missing.total_seasons != null) "series" else "movie",
+                                                )
+                                            }
+                                            requestSent = true
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
 }
 
 private data class PlaybackRequest(

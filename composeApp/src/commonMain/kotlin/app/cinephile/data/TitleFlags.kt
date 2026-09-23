@@ -9,7 +9,12 @@ expect fun readTitleFlags(): String
 expect fun writeTitleFlags(json: String)
 
 @kotlinx.serialization.Serializable
-private data class FlagState(val watched: List<Long> = emptyList(), val liked: List<Long> = emptyList())
+private data class FlagState(
+    val watched: List<Long> = emptyList(),
+    val liked: List<Long> = emptyList(),
+    /** Titles marked watched by hand, so Profile can show them like history. */
+    val watchedTitles: List<String> = emptyList(),
+)
 
 /**
  * Watched and liked, remembered per title.
@@ -29,11 +34,23 @@ object TitleFlags {
 
     fun isWatched(id: Long): Boolean = id != 0L && state.watched.contains(id)
 
+    /** Titles marked watched by hand (not played), newest first. */
+    val manualWatched: List<String> get() = state.watchedTitles.reversed()
+
     fun isLiked(id: Long): Boolean = id != 0L && state.liked.contains(id)
 
-    fun setWatched(id: Long, watched: Boolean) {
+    fun setWatched(id: Long, watched: Boolean, title: String? = null) {
         if (id == 0L) return
-        state = if (watched) state.copy(watched = (state.watched + id).distinct()) else state.copy(watched = state.watched - id)
+        val marks = when {
+            title.isNullOrBlank() -> state.watchedTitles
+            watched -> (state.watchedTitles + title).distinct()
+            else -> state.watchedTitles - title
+        }
+        state = if (watched) {
+            state.copy(watched = (state.watched + id).distinct(), watchedTitles = marks)
+        } else {
+            state.copy(watched = state.watched - id, watchedTitles = marks)
+        }
         persist()
         runCatching { CollectionsRepo.setWatched(id, watched) }
     }
