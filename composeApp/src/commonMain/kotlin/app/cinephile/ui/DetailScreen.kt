@@ -558,6 +558,17 @@ fun BeamDetailScreen(
 
         }
 
+        // ---- Series: seasons first, then the episodes themselves ----
+        if (isSeries && item.id != 0L) {
+            item {
+                SeriesSection(
+                    item = item,
+                    onUpgrade = { showPremium = true },
+                    onPlay = onPlay,
+                )
+            }
+        }
+
         // ---- Box office: only when the enrichment job has filled it in ----
 
         val budget = item.budget?.takeIf { it > 0L }

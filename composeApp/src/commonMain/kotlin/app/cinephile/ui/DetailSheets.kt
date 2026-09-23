@@ -53,7 +53,7 @@ import app.cinephile.core.ui.theme.PillShape
  * LinkSelector / DownloadModal rather than a Material bottom sheet.
  */
 @Composable
-private fun CenterModal(
+internal fun CenterModal(
     icon: ImageVector,
     title: String,
     subtitle: String,
