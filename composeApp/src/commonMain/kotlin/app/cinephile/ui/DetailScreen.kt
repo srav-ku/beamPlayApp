@@ -1784,7 +1784,8 @@ private fun HeroCard(
                 label = "Trailer",
                 icon = Icons.Filled.PlayArrow,
                 primary = false,
-                modifier = Modifier.weight(1f),
+                // With Stream and Download hidden for a series this would stretch alone.
+                modifier = if (isSeries) Modifier else Modifier.weight(1f),
                 onClick = onTrailer,
             )
         }

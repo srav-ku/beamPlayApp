@@ -83,7 +83,8 @@ fun SeriesSection(
     var loadingEpisodes by remember(item.id) { mutableStateOf(false) }
 
     // One episode at a time can be resolving, and one popup can be open.
-    var resolvingId by remember { mutableStateOf<Long?>(null) }
+    var streamLoadingId by remember { mutableStateOf<Long?>(null) }
+    var downloadLoadingId by remember { mutableStateOf<Long?>(null) }
     var streamFor by remember { mutableStateOf<Episode?>(null) }
     var streamLinks by remember { mutableStateOf<List<Link>>(emptyList()) }
     var downloadFor by remember { mutableStateOf<Episode?>(null) }
@@ -187,14 +188,15 @@ fun SeriesSection(
                     EpisodeCard(
                         episode = episode,
                         seasonNo = seasonNo,
-                        busy = resolvingId == episode.id,
+                        streamBusy = streamLoadingId == episode.id,
+                        downloadBusy = downloadLoadingId == episode.id,
                         onStream = {
-                            resolvingId = episode.id
+                            streamLoadingId = episode.id
                             scope.launch {
                                 val links = runCatching {
                                     servicesOrNull?.beamApi?.getEpisodeLinks(episode.id)?.items.orEmpty()
                                 }.getOrDefault(emptyList())
-                                resolvingId = null
+                                streamLoadingId = null
                                 if (links.isEmpty()) {
                                     // The server refused: this is the premium gate talking.
                                     onUpgrade()
@@ -205,19 +207,14 @@ fun SeriesSection(
                             }
                         },
                         onDownload = {
-                            resolvingId = episode.id
+                            downloadLoadingId = episode.id
                             scope.launch {
                                 val files = runCatching {
                                     servicesOrNull?.beamApi?.getDownloadOptions("episode", episode.id)?.items.orEmpty()
                                 }.getOrDefault(emptyList())
-                                resolvingId = null
-                                if (files.isEmpty()) {
-                                    downloadFiles = emptyList()
-                                    downloadFor = episode
-                                } else {
-                                    downloadFiles = files
-                                    downloadFor = episode
-                                }
+                                downloadLoadingId = null
+                                downloadFiles = files
+                                downloadFor = episode
                             }
                         },
                     )
@@ -267,7 +264,8 @@ fun SeriesSection(
 private fun EpisodeCard(
     episode: Episode,
     seasonNo: Int,
-    busy: Boolean,
+    streamBusy: Boolean,
+    downloadBusy: Boolean,
     onStream: () -> Unit,
     onDownload: () -> Unit,
 ) {
@@ -353,13 +351,13 @@ private fun EpisodeCard(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             EpisodeButton(
-                label = if (busy) "Loading…" else "Stream",
+                label = if (streamBusy) "Loading…" else "Stream",
                 icon = Icons.Filled.PlayArrow,
                 primary = true,
                 onClick = onStream,
             )
             EpisodeButton(
-                label = "Download",
+                label = if (downloadBusy) "Loading…" else "Download",
                 icon = Icons.Filled.Download,
                 primary = false,
                 onClick = onDownload,

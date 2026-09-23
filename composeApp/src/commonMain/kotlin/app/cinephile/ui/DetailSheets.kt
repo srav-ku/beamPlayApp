@@ -345,8 +345,8 @@ fun DownloadsSheet(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(colors.muted)
-                            .border(1.dp, colors.borderLight, RoundedCornerShape(14.dp))
+                            .background(colors.card)
+                            .border(1.dp, colors.border, RoundedCornerShape(14.dp))
                             .clickable { hint = true }
                             .padding(horizontal = 13.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -354,12 +354,12 @@ fun DownloadsSheet(
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(colors.foreground)
+                                .background(colors.amber500.copy(alpha = 0.16f))
                                 .padding(horizontal = 7.dp, vertical = 3.dp),
                         ) {
                             Text(
                                 text = file.quality.ifBlank { "File" },
-                                color = colors.background,
+                                color = colors.amber500,
                                 fontFamily = GeistMono,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -395,10 +395,10 @@ fun DownloadsSheet(
                         }
                         Spacer(Modifier.width(8.dp))
                         Box(
-                            Modifier.size(34.dp).clip(CircleShape).background(colors.foreground),
+                            Modifier.size(34.dp).clip(CircleShape).background(colors.amber500),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Icons.Filled.Download, null, tint = colors.background, modifier = Modifier.size(17.dp))
+                            Icon(Icons.Filled.Download, null, tint = colors.background, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
