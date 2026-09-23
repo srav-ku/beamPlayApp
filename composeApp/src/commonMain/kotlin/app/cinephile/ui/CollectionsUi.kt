@@ -15,7 +15,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -83,6 +84,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.layout.heightIn
 
 /* ------------------------------------------------------------------------- */
 /* Building blocks                                                            */
@@ -416,7 +418,14 @@ fun CollectionsScreen(onOpenMedia: (MediaItem) -> Unit) {
 
     if (showNew) {
         Dialog(onDismissRequest = { showNew = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Box(Modifier.fillMaxSize().background(Color(0xE6000000)), contentAlignment = Alignment.Center) {
+            Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000))
+                // Lifts the card above the keyboard so the new-list field stays visible.
+                .imePadding(),
+            contentAlignment = Alignment.Center,
+        ) {
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -773,7 +782,14 @@ private fun CollectionDetailScreen(
 
     if (renaming) {
         Dialog(onDismissRequest = { renaming = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Box(Modifier.fillMaxSize().background(Color(0xE6000000)), contentAlignment = Alignment.Center) {
+            Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000))
+                // Lifts the card above the keyboard so the new-list field stays visible.
+                .imePadding(),
+            contentAlignment = Alignment.Center,
+        ) {
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -815,7 +831,14 @@ private fun CollectionDetailScreen(
 
     if (showDelete) {
         Dialog(onDismissRequest = { showDelete = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Box(Modifier.fillMaxSize().background(Color(0xE6000000)), contentAlignment = Alignment.Center) {
+            Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000))
+                // Lifts the card above the keyboard so the new-list field stays visible.
+                .imePadding(),
+            contentAlignment = Alignment.Center,
+        ) {
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -876,7 +899,14 @@ fun CollectionPickerModal(
     var newName by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color(0xE6000000)), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xE6000000))
+                // Lifts the card above the keyboard so the new-list field stays visible.
+                .imePadding(),
+            contentAlignment = Alignment.Center,
+        ) {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -1055,3 +1085,4 @@ fun CollectionPickerModal(
         }
     }
 }
+

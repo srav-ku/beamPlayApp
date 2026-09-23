@@ -161,6 +161,7 @@ import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.StarBorder
 import app.cinephile.data.shareText
+import app.cinephile.data.TitleFlags
 
 /**
 
@@ -209,6 +210,14 @@ fun BeamDetailScreen(
     var credits by remember { mutableStateOf<TmdbCredits?>(null) }
 
     var similar by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
+    var recommended by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
+
+    // More Like This should never simply be missing: recommendations are the backup.
+    LaunchedEffect(tmdbId, similar.size) {
+        if (tmdbId != 0L && similar.isEmpty()) {
+            recommended = runCatching { Api.getRecommendations(tmdbId, isSeries) }.getOrDefault(emptyList())
+        }
+    }
 
     var studios by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -216,9 +225,9 @@ fun BeamDetailScreen(
 
     var sources by remember { mutableStateOf<List<app.cinephile.core.model.Link>>(emptyList()) }
 
-    var favorite by remember { mutableStateOf(false) }
+    var favorite by remember { mutableStateOf(TitleFlags.isLiked(item.tmdb_id ?: item.id)) }
 
-    var watched by remember { mutableStateOf(false) }
+    var watched by remember { mutableStateOf(TitleFlags.isWatched(item.tmdb_id ?: item.id)) }
 
     var myRating by remember { mutableStateOf(0) }
 
@@ -231,6 +240,16 @@ fun BeamDetailScreen(
     // anywhere in the app is reflected here.
 
     val savedInList = CollectionsRepo.inWatchLater(item.tmdb_id ?: item.id)
+
+    // Any list holding this title lights the List tile, like Watch Later does.
+    val inAnyList = CollectionsRepo.collectionsWith(item.tmdb_id ?: item.id).isNotEmpty()
+
+    // Persist likes and watched state, and keep the default lists in step.
+    LaunchedEffect(favorite, watched) {
+        val key = item.tmdb_id ?: item.id
+        TitleFlags.setLiked(key, favorite)
+        TitleFlags.setWatched(key, watched)
+    }
 
     var resolving by remember { mutableStateOf(false) }
 
@@ -393,6 +412,7 @@ fun BeamDetailScreen(
                 favorite = favorite,
 
                 watchLater = savedInList,
+                inList = inAnyList,
 
                 onBack = onBack,
 
@@ -461,35 +481,6 @@ fun BeamDetailScreen(
 
         }
 
-        // ---- Overview ----
-
-        item {
-
-            Column(Modifier.padding(horizontal = 16.dp)) {
-
-                Spacer(Modifier.height(24.dp))
-
-                SectionLabel("Overview")
-
-                Spacer(Modifier.height(6.dp))
-
-                Text(
-
-                    text = item.overview?.takeIf { it.isNotBlank() } ?: "No overview available.",
-
-                    color = colors.foreground,
-
-                    fontFamily = GeistMono,
-
-                    fontSize = 14.sp,
-
-                    lineHeight = 22.sp,
-
-                )
-
-            }
-
-        }
 
         // ---- Ratings grid: only the sources we actually have data for ----
 
@@ -567,7 +558,6 @@ fun BeamDetailScreen(
 
         }
 
-
         // ---- Box office: only when the enrichment job has filled it in ----
 
         val budget = item.budget?.takeIf { it > 0L }
@@ -582,11 +572,8 @@ fun BeamDetailScreen(
 
                     Spacer(Modifier.height(24.dp))
 
-                    Row(
 
-                        Modifier.fillMaxWidth(),
-
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        androidx.compose.foundation.layout.FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
 
                     ) {
 
@@ -636,7 +623,7 @@ fun BeamDetailScreen(
 
                                 },
 
-                                modifier = if (moneyCards.size == 1) Modifier.fillMaxWidth(0.34f) else Modifier.weight(1f),
+                                modifier = Modifier.weight(1f),
 
                             )
 
@@ -672,7 +659,6 @@ fun BeamDetailScreen(
 
         }
 
-
         // ---- Director, portrait and all, same treatment as the cast ----
         if (directors.isNotEmpty()) {
             item {
@@ -702,7 +688,7 @@ fun BeamDetailScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    LazyRow(
+                    LazyRow(Modifier.height(152.dp),
 
                         contentPadding = PaddingValues(horizontal = 16.dp),
 
@@ -815,7 +801,7 @@ fun BeamDetailScreen(
 
                         Text(
 
-                            text = "In Your Collections",
+                            text = "In Your Lists",
 
                             color = colors.foreground,
 
@@ -885,10 +871,11 @@ fun BeamDetailScreen(
 
         }
 
-
         // ---- More Like This: TMDB's own similar titles for this movie ----
 
-        if (similar.isNotEmpty()) {
+        val moreLike = if (similar.isNotEmpty()) similar else recommended
+
+        if (moreLike.isNotEmpty()) {
 
             item {
 
@@ -908,7 +895,7 @@ fun BeamDetailScreen(
 
                     ) {
 
-                        itemsIndexed(similar.take(14)) { _, rec ->
+                        itemsIndexed(moreLike.take(14)) { _, rec ->
 
                             RailCard(
 
@@ -1549,6 +1536,7 @@ private fun HeroCard(
     watched: Boolean,
     favorite: Boolean,
     watchLater: Boolean,
+    inList: Boolean = false,
     resume: ContinueItem?,
     onBack: () -> Unit,
     onPlay: () -> Unit,
@@ -1810,7 +1798,7 @@ private fun HeroCard(
             ActionTile(
                 icon = Icons.Filled.PlaylistAdd,
                 label = "List",
-                active = false,
+                active = inList,
                 modifier = Modifier.weight(1f),
                 onClick = onOpenList,
             )
@@ -1886,7 +1874,7 @@ private fun ReviewCard(rating: Int, onRate: (Int) -> Unit) {
                 .clip(RoundedCornerShape(18.dp))
                 .background(colors.card)
                 .border(1.dp, colors.border, RoundedCornerShape(18.dp))
-                .padding(horizontal = 16.dp, vertical = 18.dp),
+                .padding(horizontal = 16.dp, vertical = 26.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1896,7 +1884,7 @@ private fun ReviewCard(rating: Int, onRate: (Int) -> Unit) {
                     contentDescription = "$star star" + (if (star == 1) "" else "s"),
                     tint = if (star <= rating) colors.amber500 else colors.mutedForeground,
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(42.dp)
                         .clickable { onRate(if (rating == star) 0 else star) },
                 )
             }
@@ -2499,5 +2487,4 @@ private fun RailCard(
     }
 
 }
-
 

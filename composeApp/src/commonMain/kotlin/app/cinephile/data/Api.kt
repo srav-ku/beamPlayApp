@@ -28,6 +28,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import app.cinephile.core.model.TmdbPage
+import app.cinephile.core.model.TmdbItem
 
 class ApiException(message: String, val code: Int) : Exception(message)
 
@@ -202,6 +204,15 @@ object Api {
         }
     }
 
+    /** Backup rail for More Like This, so a thin "similar" list never empties it. */
+    suspend fun getRecommendations(tmdbId: Long, isSeries: Boolean): List<TmdbItem> =
+        cached("tmdb.rec.$tmdbId", TtlCache.TMDB_TTL) {
+            SearchJson.decodeFromString(
+                TmdbPage.serializer(),
+                fetchTmdbRaw(if (isSeries) "/tv/$tmdbId/recommendations" else "/movie/$tmdbId/recommendations"),
+            ).results.take(14)
+        }
+
     // ── Backend Database Endpoints ──────────────────────────────────────────
 
     suspend fun getMovieByTmdb(tmdbId: Long): MediaItem? {
@@ -314,4 +325,6 @@ object Api {
         authToken?.let { header("Authorization", "Bearer $it") }
     }.body()
 }
+
+
 

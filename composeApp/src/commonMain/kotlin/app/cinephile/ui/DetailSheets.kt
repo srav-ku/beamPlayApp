@@ -298,6 +298,18 @@ fun DownloadsSheet(
 ) {
     val colors = Beam.colors
     var hint by remember { mutableStateOf(false) }
+    // Same filter language as the stream popup: quality and audio language.
+    var quality by remember { mutableStateOf("") }
+    var language by remember { mutableStateOf("") }
+
+    val qualities = remember(files) { files.map { it.quality }.filter { it.isNotBlank() }.distinct() }
+    val languages = remember(files) {
+        files.flatMap { it.audioLanguageList() }.filter { it.isNotBlank() }.distinct()
+    }
+    val visible = files.filter { file ->
+        (quality.isBlank() || file.quality == quality) &&
+            (language.isBlank() || file.audioLanguageList().contains(language))
+    }
 
     CenterModal(
         icon = Icons.Filled.Download,
@@ -325,7 +337,9 @@ fun DownloadsSheet(
             )
 
             else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                files.forEach { file ->
+                if (qualities.isNotEmpty()) ChipRow("QUALITY", qualities, quality) { quality = it }
+                if (languages.isNotEmpty()) ChipRow("AUDIO", languages, language) { language = it }
+                visible.forEach { file ->
                     val langs = file.audioLanguageList().joinToString(", ")
                     Row(
                         Modifier
