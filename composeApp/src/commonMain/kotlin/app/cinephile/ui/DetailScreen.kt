@@ -1761,20 +1761,25 @@ private fun HeroCard(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            DetailButton(
-                label = if (resolving) "Loading\u2026" else "Stream",
-                icon = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
-                primary = true,
-                modifier = Modifier.weight(1f),
-                onClick = onPlay,
-            )
-            DetailButton(
-                label = "Download",
-                icon = Icons.Filled.Download,
-                primary = false,
-                modifier = Modifier.weight(1f),
-                onClick = onDownload,
-            )
+            // A series streams per episode, so the top-level Stream would be a lie.
+            if (!isSeries) {
+                DetailButton(
+                    label = if (resolving) "Loading\u2026" else "Stream",
+                    icon = if (premiumLocked) PremiumCrown else Icons.Filled.PlayArrow,
+                    primary = true,
+                    modifier = Modifier.weight(1f),
+                    onClick = onPlay,
+                )
+            }
+            if (!isSeries) {
+                DetailButton(
+                    label = "Download",
+                    icon = Icons.Filled.Download,
+                    primary = false,
+                    modifier = Modifier.weight(1f),
+                    onClick = onDownload,
+                )
+            }
             DetailButton(
                 label = "Trailer",
                 icon = Icons.Filled.PlayArrow,

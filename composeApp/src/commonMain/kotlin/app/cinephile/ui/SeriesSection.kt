@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -227,6 +229,8 @@ fun SeriesSection(
     // ---- the same popups the movie page opens, scoped to this episode ----
     val streaming = streamFor
     if (streaming != null) {
+        // A real dialog: the chooser belongs over the page, not after the last episode.
+        Dialog(onDismissRequest = { streamFor = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         SourcesSheet(
             title = "S" + seasonNo + " E" + streaming.episode_number,
             links = streamLinks,
@@ -242,16 +246,19 @@ fun SeriesSection(
             },
             onDismiss = { streamFor = null },
         )
+        }
     }
 
     val downloading = downloadFor
     if (downloading != null) {
+        Dialog(onDismissRequest = { downloadFor = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         DownloadsSheet(
             title = "S" + seasonNo + " E" + downloading.episode_number,
             files = downloadFiles,
             loading = false,
             onDismiss = { downloadFor = null },
         )
+        }
     }
 }
 
@@ -303,13 +310,12 @@ private fun EpisodeCard(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "S" + seasonNo + "  ·  E" + episode.episode_number,
+                    text = "S" + seasonNo + " · E" + episode.episode_number,
                     color = colors.amber500,
                     fontFamily = GeistMono,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
                     text = episode.name.ifBlank { "Episode " + episode.episode_number },
                     color = colors.foreground,
@@ -334,7 +340,7 @@ private fun EpisodeCard(
                 episode.runtime?.takeIf { it > 0 }?.let { minutes ->
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = minutes.toString() + " min",
+                        text = runtimeLabel(minutes),
                         color = colors.mutedForeground,
                         fontFamily = GeistMono,
                         fontSize = 10.sp,
@@ -343,21 +349,19 @@ private fun EpisodeCard(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             EpisodeButton(
                 label = if (busy) "Loading…" else "Stream",
                 icon = Icons.Filled.PlayArrow,
                 primary = true,
-                modifier = Modifier.weight(1f),
                 onClick = onStream,
             )
             EpisodeButton(
                 label = "Download",
                 icon = Icons.Filled.Download,
                 primary = false,
-                modifier = Modifier.weight(1f),
                 onClick = onDownload,
             )
         }
@@ -379,7 +383,7 @@ private fun EpisodeButton(
             .background(if (primary) colors.amber500 else colors.muted)
             .border(1.dp, if (primary) colors.amber500 else colors.border, RoundedCornerShape(50))
             .clickable { onClick() }
-            .padding(vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -387,14 +391,14 @@ private fun EpisodeButton(
             imageVector = icon,
             contentDescription = null,
             tint = if (primary) colors.background else colors.foreground,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(13.dp),
         )
-        Spacer(Modifier.width(7.dp))
+        Spacer(Modifier.width(5.dp))
         Text(
             text = label,
             color = if (primary) colors.background else colors.foreground,
             fontFamily = GeistMono,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
         )
     }
@@ -440,4 +444,15 @@ private fun SeriesLabel(text: String) {
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
     )
+}
+
+/** "1 hr 2 min", "48 min" - episode length in the unit people say out loud. */
+private fun runtimeLabel(minutes: Int): String {
+    val hours = minutes / 60
+    val rest = minutes % 60
+    return when {
+        hours <= 0 -> minutes.toString() + " min"
+        rest == 0 -> hours.toString() + " hr"
+        else -> hours.toString() + " hr " + rest + " min"
+    }
 }
