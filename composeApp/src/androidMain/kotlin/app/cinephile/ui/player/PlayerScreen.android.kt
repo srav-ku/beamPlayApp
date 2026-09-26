@@ -251,6 +251,19 @@ actual fun BeamPlayerScreen(
          // cannot decode. Letting the renderers fall back to software decoders and
          // capping the adaptive selection to 1080p means the player picks a rendition
          // it can actually play, instead of dying with a decoding error.
+         // The CDN serves real MPEG-TS under a .js name, and it is friendlier to a
+         // browser-style client. More importantly: Media3 otherwise prepares the
+         // decoder from the playlist's declared codec, and a mis-declared profile is
+         // exactly what kills the hardware decoder before a frame arrives. Reading a
+         // real segment first removes that guess.
+         val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+             .setUserAgent("Mozilla/5.0 (Linux; Android 14)")
+             .setDefaultRequestProperties(
+                 mapOf(
+                     "Referer" to "https://vidaraa.cc/",
+                     "Origin" to "https://vidaraa.cc",
+                 ),
+             )
          val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(context)
              .setEnableDecoderFallback(true)
              .setMediaCodecSelector(
@@ -274,8 +287,10 @@ actual fun BeamPlayerScreen(
                 .build()
         }
         if (subs.isNotEmpty()) builder.setSubtitleConfigurations(subs)
-
-        exo.setMediaItem(builder.build())
+val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSource(httpFactory.createDataSource()) }
+         val hlsFactory = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(mediaFactory)
+             .setAllowChunklessPreparation(false)
+         exo.setMediaSource(hlsFactory.createMediaSource(builder.build()))
         // Speed is remembered per video: movie A can sit at 2x while movie B stays 1x.
         SubtitlePrefs.loadSpeed(appCtx, storeKey)?.let { saved -> speed = saved }
         SubtitlePrefs.loadAspect(appCtx, storeKey)?.let { saved -> resizeMode = saved }
@@ -1701,4 +1716,35 @@ private object SoftwareOnlyCodecs : androidx.media3.exoplayer.mediacodec.MediaCo
         androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT
             .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
             .filter { it.softwareOnly }
+}
+
+/** Prints every media request and how many bytes came back. */
+private class LoggingDataSource(
+    private val upstream: androidx.media3.datasource.DataSource,
+) : androidx.media3.datasource.DataSource {
+    private var bytes = 0L
+
+    override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
+        bytes = 0L
+        val length = upstream.open(dataSpec)
+        println("[CinephileMedia] open " + (dataSpec.uri?.toString()?.take(120) ?: "?") + " len=" + length)
+        return length
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        val read = upstream.read(buffer, offset, length)
+        if (read > 0) bytes += read
+        return read
+    }
+
+    override fun getUri(): android.net.Uri? = upstream.uri
+
+    override fun close() {
+        println("[CinephileMedia] close bytes=" + bytes)
+        upstream.close()
+    }
+
+    override fun addTransferListener(listener: androidx.media3.datasource.TransferListener) {
+        upstream.addTransferListener(listener)
+    }
 }
