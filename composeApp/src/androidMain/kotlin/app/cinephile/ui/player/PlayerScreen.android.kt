@@ -264,7 +264,9 @@ actual fun BeamPlayerScreen(
                      "Origin" to "https://vidaraa.cc",
                  ),
              )
-         val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(context)
+         // Our own factory: Media3 never looks for the FFmpeg video renderer on its
+         // own, and that renderer is the only thing here that can decode 10-bit H.264.
+         val renderers = CinephileRenderersFactory(context, ffmpegFirst = softwareOnly)
              .setEnableDecoderFallback(true)
              .setExtensionRendererMode(
                  if (softwareOnly) {
@@ -1754,4 +1756,56 @@ private class LoggingDataSource(
     override fun addTransferListener(listener: androidx.media3.datasource.TransferListener) {
         upstream.addTransferListener(listener)
     }
+}
+
+/**
+ * Adds Jellyfin's FFmpeg video renderer ahead of the platform decoders when asked.
+ * Reflection keeps this compiling even if the extension is absent.
+ */
+@androidx.media3.common.util.UnstableApi
+private class CinephileRenderersFactory(
+    context: android.content.Context,
+    private val ffmpegFirst: Boolean,
+) : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
+
+    override fun buildVideoRenderers(
+        context: android.content.Context,
+        extensionRendererMode: Int,
+        mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+        enableDecoderFallback: Boolean,
+        eventHandler: android.os.Handler,
+        eventListener: androidx.media3.exoplayer.video.VideoRendererEventListener,
+        allowedJoiningTimeMs: Long,
+        out: ArrayList<androidx.media3.exoplayer.Renderer>,
+    ) {
+        if (ffmpegFirst && addFfmpegVideo(allowedJoiningTimeMs, eventHandler, eventListener, out)) return
+        super.buildVideoRenderers(
+            context,
+            extensionRendererMode,
+            mediaCodecSelector,
+            enableDecoderFallback,
+            eventHandler,
+            eventListener,
+            allowedJoiningTimeMs,
+            out,
+        )
+    }
+
+    private fun addFfmpegVideo(
+        allowedJoiningTimeMs: Long,
+        eventHandler: android.os.Handler,
+        eventListener: androidx.media3.exoplayer.video.VideoRendererEventListener,
+        out: ArrayList<androidx.media3.exoplayer.Renderer>,
+    ): Boolean = runCatching {
+        val cls = Class.forName("androidx.media3.decoder.ffmpeg.ExperimentalFfmpegVideoRenderer")
+        val ctor = cls.getConstructor(
+            java.lang.Long.TYPE,
+            android.os.Handler::class.java,
+            androidx.media3.exoplayer.video.VideoRendererEventListener::class.java,
+            Integer.TYPE,
+        )
+        out.add(ctor.newInstance(allowedJoiningTimeMs, eventHandler, eventListener, 0) as androidx.media3.exoplayer.Renderer)
+        println("[CinephilePlayer] ffmpeg video renderer added")
+        true
+    }.getOrDefault(false)
 }

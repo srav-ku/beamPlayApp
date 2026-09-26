@@ -51,6 +51,9 @@ kotlin {
             implementation(libs.media3.common)
             implementation(libs.media3.session)
             implementation(libs.media3.database)
+    // Software video decoding. Android's own decoders are 8-bit only and much of
+    // this catalogue is 10-bit H.264 (High 10), which this handles.
+    implementation(libs.media3.ffmpeg.decoder)
             implementation(libs.coil3.video)
             implementation(libs.androidx.core.splashscreen)
         }
