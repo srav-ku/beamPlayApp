@@ -155,6 +155,9 @@ actual fun BeamPlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
+    // Set when the hardware decoder fails mid-decode; the player is then rebuilt once
+    // on Android software decoders, which is what actually plays those streams.
+    var softwareOnly by remember { mutableStateOf(false) }
 
     var speed by remember { mutableFloatStateOf(1f) }
     var boost by remember { mutableStateOf(false) }
@@ -240,7 +243,7 @@ actual fun BeamPlayerScreen(
         }
     }
 
-    DisposableEffect(streamUrl) {
+    DisposableEffect(streamUrl, softwareOnly) {
          val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
              .setBufferDurationsMs(30_000, 300_000, 1_500, 3_000)
              .build()
@@ -250,6 +253,10 @@ actual fun BeamPlayerScreen(
          // it can actually play, instead of dying with a decoding error.
          val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(context)
              .setEnableDecoderFallback(true)
+             .setMediaCodecSelector(
+                 if (softwareOnly) SoftwareOnlyCodecs
+                 else androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT,
+             )
          val exo = ExoPlayer.Builder(context, renderers)
              .setLoadControl(loadControl)
              .build()
@@ -311,15 +318,31 @@ actual fun BeamPlayerScreen(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                playbackError = error.errorCodeName
-                // Keep the receipts: code, media, chosen video format and the cause.
+                val code = error.errorCodeName
                 val format = runCatching { exo.videoFormat }.getOrNull()
+                val describe = { f: androidx.media3.common.Format ->
+                    (f.codecs ?: f.sampleMimeType ?: "?") + " " + f.width + "x" + f.height
+                }
+                val described = format?.let(describe) ?: runCatching {
+                    exo.currentTracks.groups
+                        .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it) } }
+                        .firstOrNull { it.height > 0 }
+                        ?.let(describe)
+                }.getOrNull() ?: "?"
                 println(
-                    "[CinephilePlayer] " + error.errorCodeName +
+                    "[CinephilePlayer] " + code +
+                        " software=" + softwareOnly +
                         " url=" + streamUrl +
-                        " video=" + (format?.codecs ?: format?.sampleMimeType ?: "?") +
+                        " video=" + described +
                         " cause=" + (error.cause?.let { it::class.simpleName + ": " + it.message } ?: "none"),
                 )
+                // A chosen decoder that dies mid-decode is the one failure the renderer
+                // cannot fall back from, so retry the stream on software decoders once.
+                if (!softwareOnly && code.contains("DECODING")) {
+                    softwareOnly = true
+                } else {
+                    playbackError = code
+                }
             }
         }
         exo.addListener(listener)
@@ -1661,4 +1684,21 @@ internal object PlayerPrefs {
     fun setShowRemaining(ctx: android.content.Context, value: Boolean) {
         prefs(ctx).edit().putBoolean("show_remaining", value).apply()
     }
+}
+
+/**
+ * Android software decoders only. Hardware decoders can accept a profile and then
+ * fail while decoding, which no amount of renderer fallback recovers from - retrying
+ * the same stream here does.
+ */
+@androidx.media3.common.util.UnstableApi
+private object SoftwareOnlyCodecs : androidx.media3.exoplayer.mediacodec.MediaCodecSelector {
+    override fun getDecoderInfos(
+        mimeType: String,
+        requiresSecureDecoder: Boolean,
+        requiresTunnelingDecoder: Boolean,
+    ): List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo> =
+        androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT
+            .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+            .filter { it.softwareOnly }
 }
