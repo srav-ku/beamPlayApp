@@ -266,7 +266,10 @@ actual fun BeamPlayerScreen(
              )
          // Our own factory: Media3 never looks for the FFmpeg video renderer on its
          // own, and that renderer is the only thing here that can decode 10-bit H.264.
-         val renderers = CinephileRenderersFactory(context, ffmpegFirst = softwareOnly)
+         // FFmpeg video first, always. Rebuilding the player mid-session after a decode
+         // failure left the new player without a video surface, so the software path is
+         // taken from the start instead. Hardware decoders stay available for audio.
+         val renderers = CinephileRenderersFactory(context, ffmpegFirst = true)
              .setEnableDecoderFallback(true)
              .setExtensionRendererMode(
                  if (softwareOnly) {
