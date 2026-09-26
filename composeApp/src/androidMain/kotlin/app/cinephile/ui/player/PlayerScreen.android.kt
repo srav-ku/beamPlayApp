@@ -266,6 +266,13 @@ actual fun BeamPlayerScreen(
              )
          val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(context)
              .setEnableDecoderFallback(true)
+             .setExtensionRendererMode(
+                 if (softwareOnly) {
+                     androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                 } else {
+                     androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+                 },
+             )
              .setMediaCodecSelector(
                  if (softwareOnly) SoftwareOnlyCodecs
                  else androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT,
