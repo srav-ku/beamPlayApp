@@ -244,7 +244,19 @@ actual fun BeamPlayerScreen(
          val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
              .setBufferDurationsMs(30_000, 300_000, 1_500, 3_000)
              .build()
-         val exo = ExoPlayer.Builder(context).setLoadControl(loadControl).build()
+         // Some sources publish 4K and 10-bit HEVC renditions that a mid-range device
+         // cannot decode. Letting the renderers fall back to software decoders and
+         // capping the adaptive selection to 1080p means the player picks a rendition
+         // it can actually play, instead of dying with a decoding error.
+         val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(context)
+             .setEnableDecoderFallback(true)
+         val exo = ExoPlayer.Builder(context, renderers)
+             .setLoadControl(loadControl)
+             .build()
+         exo.trackSelectionParameters = androidx.media3.common.TrackSelectionParameters.Builder()
+             .setMaxVideoSize(1920, 1080)
+             .setMaxVideoBitrate(12_000_000)
+             .build()
         val builder = MediaItem.Builder().setUri(streamUrl)
         val subs = subtitles.map { sub ->
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
@@ -300,6 +312,14 @@ actual fun BeamPlayerScreen(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 playbackError = error.errorCodeName
+                // Keep the receipts: code, media, chosen video format and the cause.
+                val format = runCatching { exo.videoFormat }.getOrNull()
+                println(
+                    "[CinephilePlayer] " + error.errorCodeName +
+                        " url=" + streamUrl +
+                        " video=" + (format?.codecs ?: format?.sampleMimeType ?: "?") +
+                        " cause=" + (error.cause?.let { it::class.simpleName + ": " + it.message } ?: "none"),
+                )
             }
         }
         exo.addListener(listener)
