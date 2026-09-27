@@ -72,6 +72,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        // libVLC ships natives for four architectures; the phone is arm64, so the
+        // other three only bloat the APK past what can be installed.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
         applicationId = "app.cinephile"
         minSdk = 26
         targetSdk = 35
