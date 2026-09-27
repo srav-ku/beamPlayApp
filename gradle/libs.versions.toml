@@ -1,6 +1,7 @@
 [versions]
 voyager = "1.1.0-beta03"
 media3 = "1.5.0"
+libvlc = "3.6.5"
 datastore = "1.1.1"
 datetime = "0.6.1"
 agp = "8.7.3"
@@ -25,6 +26,7 @@ media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 media3-ffmpeg-decoder = { module = "org.jellyfin.media3:media3-ffmpeg-decoder", version = "1.5.0+1" }
+libvlc = { module = "org.videolan.android:libvlc-all", version.ref = "libvlc" }
 media3-database = { module = "androidx.media3:media3-database", version.ref = "media3" }
 coil3-video = { module = "io.coil-kt.coil3:coil-video", version.ref = "coil" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version = "1.0.1" }

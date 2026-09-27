@@ -54,6 +54,8 @@ kotlin {
     // Software video decoding. Android's own decoders are 8-bit only and much of
     // this catalogue is 10-bit H.264 (High 10), which this handles.
     implementation(libs.media3.ffmpeg.decoder)
+    // libVLC: the engine that actually renders this catalogue (10-bit H.264).
+    implementation(libs.libvlc)
             implementation(libs.coil3.video)
             implementation(libs.androidx.core.splashscreen)
         }

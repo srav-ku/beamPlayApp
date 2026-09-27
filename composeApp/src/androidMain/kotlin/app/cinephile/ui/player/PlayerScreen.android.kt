@@ -158,6 +158,29 @@ actual fun BeamPlayerScreen(
     // Set when the hardware decoder fails mid-decode; the player is then rebuilt once
     // on Android software decoders, which is what actually plays those streams.
     var softwareOnly by remember { mutableStateOf(false) }
+    var useVlc by remember(streamUrl) { mutableStateOf(false) }
+    var renderedFirstFrame by remember(streamUrl) { mutableStateOf(false) }
+
+    // Media3 cannot paint this catalogue (10-bit H.264). If nothing has been drawn
+    // while playback is running, or a decode fails outright, libVLC takes over.
+    LaunchedEffect(streamUrl, renderedFirstFrame) {
+        if (renderedFirstFrame) return@LaunchedEffect
+        delay(5000)
+        if (!renderedFirstFrame) useVlc = true
+    }
+
+    if (useVlc) {
+        VlcPlaybackScreen(
+            title = title,
+            streamUrl = streamUrl,
+            subtitles = subtitles,
+            startPositionMs = if (startPositionMs > 0L) startPositionMs else PlaybackStore.resumeMs(context, resumeKey),
+            resumeKey = resumeKey,
+            onBack = onBack,
+            onProgress = onProgress,
+        )
+        return
+    }
 
     var speed by remember { mutableFloatStateOf(1f) }
     var boost by remember { mutableStateOf(false) }
@@ -372,6 +395,11 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                 }
             }
         }
+        exo.addListener(object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                renderedFirstFrame = true
+            }
+        })
         exo.addListener(listener)
          onDispose {
              val pos = exo.currentPosition
