@@ -438,15 +438,12 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     // filling on a thin link, so playback never began.
                     // A minute of read-ahead: preload without making seeks expensive, and
                     // without the demuxer racing far ahead of the playhead.
-                    "--network-caching=60000",
-                    "--file-caching=30000",
-                    // Render straight into the surface instead of going through GL: with
-                    // software decoding every extra copy shows up as stutter.
-                    "--vout=android_display",
+                    "--network-caching=3000",
+                    "--file-caching=3000",
                     "--http-reconnect",
                     // Auto threads, but at least two: one core cannot decode 10-bit H.264
                     // at 720p in real time.
-                    "--avcodec-threads=2",
+                    "--avcodec-threads=0",
                     "--drop-late-frames",
                     "--skip-frames",
                     "--audio-time-stretch",
