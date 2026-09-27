@@ -429,8 +429,10 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     // roughly this many milliseconds of media in front of the playhead.
                     // Start quickly, keep a cushion. Twelve seconds never finished
                     // filling on a thin link, so playback never began.
-                    "--network-caching=3500",
-                    "--file-caching=8000",
+                    // Three minutes of read-ahead: playback starts on the first frames and
+                    // then keeps filling well ahead of the playhead.
+                    "--network-caching=180000",
+                    "--file-caching=120000",
                     "--http-reconnect",
                     "--avcodec-threads=0",
                     "--drop-late-frames",
@@ -451,6 +453,11 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             }
             mp.media = media
             media.release()
+            // The app already fetched these .vtt files; hand them to VLC (type 0 =
+            // subtitle) so they render onto the surface.
+            subtitles.forEach { sub ->
+                runCatching { mp.addSlave(0, Uri.parse(sub.url), true) }
+            }
             mp.setEventListener { event ->
                 when (event.type) {
                     MediaPlayer.Event.Opening -> isBuffering = true
@@ -513,6 +520,19 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
         }
 
         // Attach the surface once both the VLC player and the layout exist.
+        // VLC scales internally, so the container must not constrain it.
+        LaunchedEffect(resizeMode, useVlc, vlcMp) {
+            if (!useVlc) return@LaunchedEffect
+            val mp = vlcMp ?: return@LaunchedEffect
+            val scale = when (resizeMode) {
+                ASPECT_16_9 -> MediaPlayer.ScaleType.SURFACE_16_9
+                ASPECT_4_3 -> MediaPlayer.ScaleType.SURFACE_4_3
+                3 -> MediaPlayer.ScaleType.SURFACE_FILL
+                else -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
+            }
+            runCatching { mp.setVideoScale(scale) }
+        }
+
         LaunchedEffect(vlcMp, videoLayout) {
             val mp = vlcMp ?: return@LaunchedEffect
             val view = videoLayout ?: return@LaunchedEffect
@@ -558,9 +578,16 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
     val shownPosition = if (scrubbing) scrubPosition else positionMs
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = androidx.compose.ui.Alignment.Center,
+        ) {
         key(useVlc) {
         AndroidView(
-            modifier = (if (resizeMode == ASPECT_16_9) Modifier.aspectRatio(16f / 9f)
+            // In VLC mode the video fills the frame and VLC letterboxes inside it; boxing it
+            // here as well is what left the right side blank.
+            modifier = (if (useVlc) Modifier.fillMaxSize()
+                else if (resizeMode == ASPECT_16_9) Modifier.aspectRatio(16f / 9f)
                 else if (resizeMode == ASPECT_4_3) Modifier.aspectRatio(4f / 3f)
                 else Modifier.fillMaxSize()).graphicsLayer(scaleX = zoom, scaleY = zoom),
             factory = { ctx ->
@@ -590,6 +617,7 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             },
         )
         }
+        }
 
         // Parse the .vtt files ourselves (same idea as the web app's vtt-parser) so sync can shift cue timing.
         LaunchedEffect(subtitles) {
@@ -598,6 +626,8 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     runCatching {
                         val c = java.net.URL(s.url).openConnection() as java.net.HttpURLConnection
                         c.setRequestProperty("User-Agent", "Mozilla/5.0")
+                        c.setRequestProperty("Referer", "https://vidaraa.cc/")
+                        c.setRequestProperty("Origin", "https://vidaraa.cc")
                         // Same allowance the stream gets, or the subtitle host refuses it.
                         c.setRequestProperty("Referer", "https://vidaraa.cc/")
                         c.setRequestProperty("Origin", "https://vidaraa.cc")
