@@ -169,13 +169,20 @@ actual fun BeamPlayerScreen(
     var softwareOnly by remember { mutableStateOf(false) }
     var useVlc by remember(streamUrl) { mutableStateOf(false) }
     var renderedFirstFrame by remember(streamUrl) { mutableStateOf(false) }
+    // Titles that needed libVLC once go straight there next time: no wasted attempt,
+    // no extra hand-off.
+    var needsVlc by remember(streamUrl) { mutableStateOf(VlcMemo.isMarked(context, streamUrl)) }
 
     // Media3 cannot paint this catalogue (10-bit H.264). If nothing has been drawn
     // while playback is running, or a decode fails outright, libVLC takes over.
     LaunchedEffect(streamUrl, renderedFirstFrame) {
         if (renderedFirstFrame) return@LaunchedEffect
-        delay(2500)
-        if (!renderedFirstFrame) useVlc = true
+        delay(if (needsVlc) 0L else 2500L)
+        if (!renderedFirstFrame) {
+            VlcMemo.mark(context, streamUrl)
+            needsVlc = true
+            useVlc = true
+        }
     }
 
     // No screen swap: the engine changes underneath this UI, nothing else does.
@@ -429,12 +436,17 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     // roughly this many milliseconds of media in front of the playhead.
                     // Start quickly, keep a cushion. Twelve seconds never finished
                     // filling on a thin link, so playback never began.
-                    // Three minutes of read-ahead: playback starts on the first frames and
-                    // then keeps filling well ahead of the playhead.
-                    "--network-caching=180000",
-                    "--file-caching=120000",
+                    // A minute of read-ahead: preload without making seeks expensive, and
+                    // without the demuxer racing far ahead of the playhead.
+                    "--network-caching=60000",
+                    "--file-caching=30000",
+                    // Render straight into the surface instead of going through GL: with
+                    // software decoding every extra copy shows up as stutter.
+                    "--vout=android_display",
                     "--http-reconnect",
-                    "--avcodec-threads=0",
+                    // Auto threads, but at least two: one core cannot decode 10-bit H.264
+                    // at 720p in real time.
+                    "--avcodec-threads=2",
                     "--drop-late-frames",
                     "--skip-frames",
                     "--audio-time-stretch",
@@ -2042,4 +2054,22 @@ private class VlcEngine(private val mp: MediaPlayer) : Engine {
     override fun setTextTrack(id: String) { runCatching { mp.setSpuTrack(id.toInt()) } }
     override fun prepare() { play() }
     override fun release() { runCatching { mp.stop() } }
+}
+
+/** Remembers which streams needed libVLC, so repeat plays skip the Media3 attempt. */
+private object VlcMemo {
+    private const val PREFS = "cinephile_vlc_memo"
+
+    fun isMarked(context: android.content.Context, key: String): Boolean =
+        runCatching {
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .getBoolean(key.hashCode().toString(), false)
+        }.getOrDefault(false)
+
+    fun mark(context: android.content.Context, key: String) {
+        runCatching {
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean(key.hashCode().toString(), true).apply()
+        }
+    }
 }
