@@ -174,7 +174,7 @@ actual fun BeamPlayerScreen(
     // while playback is running, or a decode fails outright, libVLC takes over.
     LaunchedEffect(streamUrl, renderedFirstFrame) {
         if (renderedFirstFrame) return@LaunchedEffect
-        delay(5000)
+        delay(2500)
         if (!renderedFirstFrame) useVlc = true
     }
 
@@ -424,7 +424,14 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             val libVlc = LibVLC(
                 appCtx,
                 arrayListOf(
-                    "--network-caching=1200",
+                    // Prefetch ahead so playback does not stall on a thin link: VLC reads
+                    // roughly this many milliseconds of media in front of the playhead.
+                    "--network-caching=12000",
+                    "--file-caching=12000",
+                    "--live-caching=12000",
+                    "--http-reconnect",
+                    "--http-continuous",
+                    "--avcodec-threads=0",
                     "--no-drop-late-frames",
                     "--no-skip-frames",
                     "--audio-time-stretch",
@@ -440,7 +447,10 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             media.release()
             mp.setEventListener { event ->
                 when (event.type) {
+                    MediaPlayer.Event.Opening -> isBuffering = true
+                    MediaPlayer.Event.Buffering -> isBuffering = event.buffering < 100f
                     MediaPlayer.Event.Playing -> {
+                        isBuffering = false
                         isPlaying = true
                         runCatching {
                             audioTracks = mp.audioTracks.orEmpty().map { PlayerTrack(it.id.toString(), it.name, false) }
@@ -475,6 +485,19 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                 runCatching { libVlc.release() }
                 vlcMp = null
             }
+        }
+
+        // Resize choices drive the engine that is actually drawing.
+        LaunchedEffect(resizeMode, useVlc, vlcMp) {
+            if (!useVlc) return@LaunchedEffect
+            val mp = vlcMp ?: return@LaunchedEffect
+            val scale = when (resizeMode) {
+                ASPECT_16_9 -> MediaPlayer.ScaleType.SURFACE_16_9
+                ASPECT_4_3 -> MediaPlayer.ScaleType.SURFACE_4_3
+                3 -> MediaPlayer.ScaleType.SURFACE_FILL
+                else -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
+            }
+            runCatching { mp.setVideoScale(scale) }
         }
 
         // Attach the surface once both the VLC player and the layout exist.
@@ -563,6 +586,9 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     runCatching {
                         val c = java.net.URL(s.url).openConnection() as java.net.HttpURLConnection
                         c.setRequestProperty("User-Agent", "Mozilla/5.0")
+                        // Same allowance the stream gets, or the subtitle host refuses it.
+                        c.setRequestProperty("Referer", "https://vidaraa.cc/")
+                        c.setRequestProperty("Origin", "https://vidaraa.cc")
                         c.connectTimeout = 10000
                         c.readTimeout = 15000
                         parseVtt(c.inputStream.bufferedReader().readText())
