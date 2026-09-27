@@ -77,6 +77,26 @@ fun VlcPlaybackScreen(
     var position by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
     var failed by remember { mutableStateOf(false) }
+    var videoLayout by remember { mutableStateOf<VLCVideoLayout?>(null) }
+
+    // The surface must be attached once BOTH the player and the view exist. Attaching
+    // in the view factory ran before the player was created, which is why playback had
+    // controls and audio but no picture.
+    LaunchedEffect(player, videoLayout) {
+        val mp = player ?: return@LaunchedEffect
+        val view = videoLayout ?: return@LaunchedEffect
+        runCatching { mp.attachViews(view, null, true, false) }
+        runCatching { mp.play() }
+    }
+
+    // Keep the player landscape while it owns the screen, as the other player does.
+    DisposableEffect(streamUrl) {
+        val activity = activityOf(context)
+        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
 
     DisposableEffect(streamUrl) {
         val libVlc = LibVLC(
@@ -150,13 +170,10 @@ fun VlcPlaybackScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                    player?.let { mp ->
-                        runCatching { mp.attachViews(this, null, true, false) }
-                        runCatching { mp.play() }
-                    }
+                    videoLayout = this
                 }
             },
-            update = { _ -> },
+            update = { v -> videoLayout = v },
         )
 
         // ---- top bar: back + title ----
@@ -320,4 +337,14 @@ private fun stamp(ms: Long): String {
     } else {
         minutes.toString() + ":" + seconds.toString().padStart(2, '0')
     }
+}
+
+/** The hosting activity, wherever it sits in the context chain. */
+private fun activityOf(context: android.content.Context): android.app.Activity? {
+    var current: android.content.Context? = context
+    while (current is android.content.ContextWrapper) {
+        if (current is android.app.Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
