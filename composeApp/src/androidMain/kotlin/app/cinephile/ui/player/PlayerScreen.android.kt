@@ -115,6 +115,11 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.key
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
 
 private val SPEED_STEPS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 private const val AUTO_HIDE_MS = 5000L
@@ -145,7 +150,11 @@ actual fun BeamPlayerScreen(
     val view = LocalView.current
     val activity = remember(context) { context.findActivity() }
 
-    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    // The UI drives this; ExoPlayer or libVLC sits behind it.
+    var player by remember { mutableStateOf<Engine?>(null) }
+    var exoRef by remember { mutableStateOf<ExoPlayer?>(null) }
+    var vlcMp by remember { mutableStateOf<MediaPlayer?>(null) }
+    var videoLayout by remember { mutableStateOf<VLCVideoLayout?>(null) }
     var controlsVisible by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
 
@@ -169,18 +178,7 @@ actual fun BeamPlayerScreen(
         if (!renderedFirstFrame) useVlc = true
     }
 
-    if (useVlc) {
-        VlcPlaybackScreen(
-            title = title,
-            streamUrl = streamUrl,
-            subtitles = subtitles,
-            startPositionMs = if (startPositionMs > 0L) startPositionMs else PlaybackStore.resumeMs(context, resumeKey),
-            resumeKey = resumeKey,
-            onBack = onBack,
-            onProgress = onProgress,
-        )
-        return
-    }
+    // No screen swap: the engine changes underneath this UI, nothing else does.
 
     var speed by remember { mutableFloatStateOf(1f) }
     var boost by remember { mutableStateOf(false) }
@@ -261,7 +259,8 @@ actual fun BeamPlayerScreen(
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             PlayerSession.isOpen = false
-            player?.release()
+            exoRef?.release()
+            exoRef = null
             player = null
         }
     }
@@ -336,7 +335,8 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
              else if (PlaybackStore.isCompleted(appCtx, storeKey)) 0L
              else PlaybackStore.resumeMs(appCtx, storeKey)
          if (resumeAt > 0L) exo.seekTo(resumeAt)
-        player = exo
+        exoRef = exo
+        player = ExoEngine(exo)
 
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
@@ -401,6 +401,7 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             }
         })
         exo.addListener(listener)
+
          onDispose {
              val pos = exo.currentPosition
              val dur = exo.duration.coerceAtLeast(0L)
@@ -413,6 +414,76 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
              exo.release()
          }
     }
+
+        // VLC takes over the same UI when Media3 cannot render the stream.
+        DisposableEffect(streamUrl, useVlc) {
+            if (!useVlc) return@DisposableEffect onDispose { }
+            runCatching { exoRef?.stop() }
+            runCatching { exoRef?.release() }
+            exoRef = null
+            val libVlc = LibVLC(
+                appCtx,
+                arrayListOf(
+                    "--network-caching=1200",
+                    "--no-drop-late-frames",
+                    "--no-skip-frames",
+                    "--audio-time-stretch",
+                ),
+            )
+            val mp = MediaPlayer(libVlc)
+            val media = Media(libVlc, Uri.parse(streamUrl)).apply {
+                setHWDecoderEnabled(true, true)
+                addOption(":http-referrer=https://vidaraa.cc/")
+                addOption(":http-user-agent=Mozilla/5.0 (Linux; Android 14)")
+            }
+            mp.media = media
+            media.release()
+            mp.setEventListener { event ->
+                when (event.type) {
+                    MediaPlayer.Event.Playing -> {
+                        isPlaying = true
+                        runCatching {
+                            audioTracks = mp.audioTracks.orEmpty().map { PlayerTrack(it.id.toString(), it.name, false) }
+                            textTracks = mp.spuTracks.orEmpty().map { PlayerTrack(it.id.toString(), it.name, false) }
+                        }
+                    }
+                    MediaPlayer.Event.Paused -> isPlaying = false
+                    MediaPlayer.Event.TimeChanged -> if (!scrubbing) positionMs = event.timeChanged
+                    MediaPlayer.Event.LengthChanged -> if (event.lengthChanged > 0) durationMs = event.lengthChanged
+                    MediaPlayer.Event.EncounteredError -> playbackError = "libVLC could not open this stream"
+                    MediaPlayer.Event.EndReached ->
+                        runCatching { PlaybackStore.markCompleted(appCtx, storeKey, title, durationMs, streamUrl) }
+                }
+            }
+            vlcMp = mp
+            player = VlcEngine(mp)
+            if (startPositionMs > 0L) runCatching { mp.time = startPositionMs }
+            onDispose {
+                runCatching {
+                    val pos = mp.time
+                    val len = mp.length
+                    if (PlaybackStore.isFinished(pos, len)) {
+                        PlaybackStore.markCompleted(appCtx, storeKey, title, len, streamUrl)
+                    } else if (pos >= 3_000L) {
+                        PlaybackStore.saveProgress(appCtx, storeKey, title, pos, len, streamUrl)
+                    }
+                }
+                runCatching { mp.setEventListener(null) }
+                runCatching { mp.stop() }
+                runCatching { mp.detachViews() }
+                runCatching { mp.release() }
+                runCatching { libVlc.release() }
+                vlcMp = null
+            }
+        }
+
+        // Attach the surface once both the VLC player and the layout exist.
+        LaunchedEffect(vlcMp, videoLayout) {
+            val mp = vlcMp ?: return@LaunchedEffect
+            val view = videoLayout ?: return@LaunchedEffect
+            runCatching { mp.attachViews(view, null, true, false) }
+            runCatching { mp.play() }
+        }
     LaunchedEffect(statusPill) { if (statusPill != null) { delay(1000); statusPill = null } }
 
     LaunchedEffect(subtitleStyle, playerView) {
@@ -452,23 +523,38 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
     val shownPosition = if (scrubbing) scrubPosition else positionMs
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
+        key(useVlc) {
         AndroidView(
             modifier = (if (resizeMode == ASPECT_16_9) Modifier.aspectRatio(16f / 9f)
                 else if (resizeMode == ASPECT_4_3) Modifier.aspectRatio(4f / 3f)
                 else Modifier.fillMaxSize()).graphicsLayer(scaleX = zoom, scaleY = zoom),
             factory = { ctx ->
-                PlayerView(ctx).also { playerView = it }.apply {
-                    useController = false
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                    keepScreenOn = true
+                if (useVlc) {
+                    VLCVideoLayout(ctx).apply {
+                        layoutParams = android.view.ViewGroup.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                    }
+                } else {
+                    PlayerView(ctx).also { playerView = it }.apply {
+                        useController = false
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                        keepScreenOn = true
+                    }
                 }
             },
             update = { v ->
-                v.player = player
-                v.resizeMode = if (resizeMode < 0) AspectRatioFrameLayout.RESIZE_MODE_FIT else resizeMode
-                v.subtitleView?.let { applyCaptionStyle(it, subtitleStyle) }
+                if (v is VLCVideoLayout) {
+                    videoLayout = v
+                } else if (v is PlayerView) {
+                    v.player = exoRef
+                    v.resizeMode = if (resizeMode < 0) AspectRatioFrameLayout.RESIZE_MODE_FIT else resizeMode
+                    v.subtitleView?.let { applyCaptionStyle(it, subtitleStyle) }
+                }
             },
         )
+        }
 
         // Parse the .vtt files ourselves (same idea as the web app's vtt-parser) so sync can shift cue timing.
         LaunchedEffect(subtitles) {
@@ -942,10 +1028,10 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                 audioTracks = audioTracks,
                 textTracks = textTracks,
                 onSelectAudio = { t ->
-                    player?.let { p -> selectTrack(p, C.TRACK_TYPE_AUDIO, t.id) }
+                    player?.setAudioTrack(t.id)
                     SubtitlePrefs.saveAudio(appCtx, storeKey, t.id)
                 },
-                onSelectText = { t -> player?.let { p -> selectTrack(p, C.TRACK_TYPE_TEXT, t.id) } },
+                onSelectText = { t -> player?.setTextTrack(t.id) },
                 captionScale = captionScale,
                 onCaptionScale = { captionScale = it },
                 captionBg = captionBg,
@@ -1839,4 +1925,53 @@ private class CinephileRenderersFactory(
         println("[CinephilePlayer] ffmpeg video renderer added")
         true
     }.getOrDefault(false)
+}
+
+/** What the player UI needs, whichever engine is underneath. */
+@androidx.media3.common.util.UnstableApi
+private interface Engine {
+    val currentPosition: Long
+    val bufferedPosition: Long
+    val duration: Long
+    val isPlaying: Boolean
+    fun play()
+    fun pause()
+    fun seekTo(positionMs: Long)
+    fun setPlaybackSpeed(speed: Float)
+    fun setAudioTrack(id: String)
+    fun setTextTrack(id: String)
+    fun prepare()
+    fun release()
+}
+
+@androidx.media3.common.util.UnstableApi
+private class ExoEngine(private val exo: ExoPlayer) : Engine {
+    override val currentPosition: Long get() = exo.currentPosition
+    override val bufferedPosition: Long get() = exo.bufferedPosition
+    override val duration: Long get() = exo.duration
+    override val isPlaying: Boolean get() = exo.isPlaying
+    override fun play() { exo.play() }
+    override fun pause() { exo.pause() }
+    override fun seekTo(positionMs: Long) { exo.seekTo(positionMs) }
+    override fun setPlaybackSpeed(speed: Float) { exo.setPlaybackSpeed(speed) }
+    override fun setAudioTrack(id: String) { selectTrack(exo, C.TRACK_TYPE_AUDIO, id) }
+    override fun setTextTrack(id: String) { selectTrack(exo, C.TRACK_TYPE_TEXT, id) }
+    override fun prepare() { exo.prepare() }
+    override fun release() { exo.release() }
+}
+
+@androidx.media3.common.util.UnstableApi
+private class VlcEngine(private val mp: MediaPlayer) : Engine {
+    override val currentPosition: Long get() = runCatching { mp.time }.getOrDefault(0L)
+    override val bufferedPosition: Long get() = currentPosition
+    override val duration: Long get() = runCatching { mp.length }.getOrDefault(0L)
+    override val isPlaying: Boolean get() = runCatching { mp.isPlaying }.getOrDefault(false)
+    override fun play() { runCatching { mp.play() } }
+    override fun pause() { runCatching { mp.pause() } }
+    override fun seekTo(positionMs: Long) { runCatching { mp.time = positionMs } }
+    override fun setPlaybackSpeed(speed: Float) { runCatching { mp.rate = speed } }
+    override fun setAudioTrack(id: String) { runCatching { mp.setAudioTrack(id.toInt()) } }
+    override fun setTextTrack(id: String) { runCatching { mp.setSpuTrack(id.toInt()) } }
+    override fun prepare() { play() }
+    override fun release() { runCatching { mp.stop() } }
 }
