@@ -169,13 +169,20 @@ actual fun BeamPlayerScreen(
     var softwareOnly by remember { mutableStateOf(false) }
     var useVlc by remember(streamUrl) { mutableStateOf(false) }
     var renderedFirstFrame by remember(streamUrl) { mutableStateOf(false) }
+    // Titles that needed libVLC once go straight there next time, so the hand-off
+    // costs nothing on a repeat watch.
+    var needsVlc by remember(streamUrl) { mutableStateOf(VlcMemo.isMarked(context, streamUrl)) }
 
     // Media3 cannot paint this catalogue (10-bit H.264). If nothing has been drawn
     // while playback is running, or a decode fails outright, libVLC takes over.
     LaunchedEffect(streamUrl, renderedFirstFrame) {
         if (renderedFirstFrame) return@LaunchedEffect
-        delay(2500)
-        if (!renderedFirstFrame) useVlc = true
+        delay(if (needsVlc) 0L else 2500L)
+        if (!renderedFirstFrame) {
+            VlcMemo.mark(context, streamUrl)
+            needsVlc = true
+            useVlc = true
+        }
     }
 
     // No screen swap: the engine changes underneath this UI, nothing else does.
@@ -266,8 +273,10 @@ actual fun BeamPlayerScreen(
     }
 
     DisposableEffect(streamUrl, softwareOnly) {
+         // Start after a short fill, then keep growing towards two minutes while the
+         // link allows it - the "buffer ahead" model rather than one fixed number.
          val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
-             .setBufferDurationsMs(30_000, 300_000, 1_500, 3_000)
+             .setBufferDurationsMs(15_000, 120_000, 1_500, 3_000)
              .build()
          // Some sources publish 4K and 10-bit HEVC renditions that a mid-range device
          // cannot decode. Letting the renderers fall back to software decoders and
@@ -431,9 +440,11 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     "--network-caching=3500",
                     "--file-caching=8000",
                     "--http-reconnect",
+                    // Fetch HLS segments in parallel instead of one at a time.
+                    "--hls-segment-threads=4",
                     "--avcodec-threads=0",
-                    "--no-drop-late-frames",
-                    "--no-skip-frames",
+                    "--drop-late-frames",
+                    "--skip-frames",
                     "--audio-time-stretch",
                 ),
             )
@@ -452,7 +463,6 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     MediaPlayer.Event.Playing -> {
                         isBuffering = false
                         isPlaying = true
-                        if (!mp.isSeekable && false) Unit
                         runCatching {
                             val at = if (startPositionMs > 0L) startPositionMs else PlaybackStore.resumeMs(appCtx, storeKey)
                             if (at > 0L && mp.time < at - 2_000L) mp.time = at
@@ -2006,4 +2016,22 @@ private class VlcEngine(private val mp: MediaPlayer) : Engine {
     override fun setTextTrack(id: String) { runCatching { mp.setSpuTrack(id.toInt()) } }
     override fun prepare() { play() }
     override fun release() { runCatching { mp.stop() } }
+}
+
+/** Remembers which streams needed libVLC, so repeat plays skip the Media3 attempt. */
+private object VlcMemo {
+    private const val PREFS = "cinephile_vlc_memo"
+
+    fun isMarked(context: android.content.Context, key: String): Boolean =
+        runCatching {
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .getBoolean(key.hashCode().toString(), false)
+        }.getOrDefault(false)
+
+    fun mark(context: android.content.Context, key: String) {
+        runCatching {
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean(key.hashCode().toString(), true).apply()
+        }
+    }
 }
