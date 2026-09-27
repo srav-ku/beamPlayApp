@@ -426,11 +426,11 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                 arrayListOf(
                     // Prefetch ahead so playback does not stall on a thin link: VLC reads
                     // roughly this many milliseconds of media in front of the playhead.
-                    "--network-caching=12000",
-                    "--file-caching=12000",
-                    "--live-caching=12000",
+                    // Start quickly, keep a cushion. Twelve seconds never finished
+                    // filling on a thin link, so playback never began.
+                    "--network-caching=3500",
+                    "--file-caching=8000",
                     "--http-reconnect",
-                    "--http-continuous",
                     "--avcodec-threads=0",
                     "--no-drop-late-frames",
                     "--no-skip-frames",
@@ -452,6 +452,11 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     MediaPlayer.Event.Playing -> {
                         isBuffering = false
                         isPlaying = true
+                        if (!mp.isSeekable && false) Unit
+                        runCatching {
+                            val at = if (startPositionMs > 0L) startPositionMs else PlaybackStore.resumeMs(appCtx, storeKey)
+                            if (at > 0L && mp.time < at - 2_000L) mp.time = at
+                        }
                         runCatching {
                             audioTracks = mp.audioTracks.orEmpty().map { PlayerTrack(it.id.toString(), it.name, false) }
                             textTracks = mp.spuTracks.orEmpty().map { PlayerTrack(it.id.toString(), it.name, false) }
@@ -467,7 +472,8 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             }
             vlcMp = mp
             player = VlcEngine(mp)
-            if (startPositionMs > 0L) runCatching { mp.time = startPositionMs }
+            // The resume point is applied on the first Playing event: seeking before
+            // VLC has opened the media is discarded and playback starts at zero.
             onDispose {
                 runCatching {
                     val pos = mp.time
