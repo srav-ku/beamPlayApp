@@ -167,7 +167,10 @@ actual fun BeamPlayerScreen(
     // Set when the hardware decoder fails mid-decode; the player is then rebuilt once
     // on Android software decoders, which is what actually plays those streams.
     var softwareOnly by remember { mutableStateOf(false) }
-    var useVlc by remember(streamUrl) { mutableStateOf(false) }
+    // HLS from this source goes straight to libVLC. Media3 opens these segments and
+    // reads zero bytes (they are served as .woff under a JS content type), so the
+    // probe was pure delay before every play.
+    var useVlc by remember(streamUrl) { mutableStateOf(streamUrl.contains(".m3u8")) }
     var renderedFirstFrame by remember(streamUrl) { mutableStateOf(false) }
     // Titles that needed libVLC once go straight there next time: no wasted attempt,
     // no extra hand-off.
@@ -177,7 +180,8 @@ actual fun BeamPlayerScreen(
     // while playback is running, or a decode fails outright, libVLC takes over.
     LaunchedEffect(streamUrl, renderedFirstFrame) {
         if (renderedFirstFrame) return@LaunchedEffect
-        delay(if (needsVlc) 0L else 1200L)
+        if (useVlc) return@LaunchedEffect
+        delay(1200L)
         if (!renderedFirstFrame) {
             VlcMemo.mark(context, streamUrl)
             needsVlc = true

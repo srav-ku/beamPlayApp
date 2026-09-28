@@ -28,6 +28,15 @@ class CinephileApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         // Paint from the last session immediately; anything past its TTL is ignored.
         app.cinephile.data.TtlCache.hydrate()
+
+        // Load libVLC's native library now, in the background: it is ~40MB of .so and
+        // loading it the first time a film starts is what made opening the player slow.
+        Thread {
+            runCatching {
+                val vlc = org.videolan.libvlc.LibVLC(this, emptyList())
+                vlc.release()
+            }
+        }.start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
