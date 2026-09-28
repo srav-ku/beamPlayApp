@@ -1,35 +1,36 @@
 package app.cinephile.core.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.cinephile.core.ui.theme.Beam
-import app.cinephile.core.ui.theme.GeistMono
 
 /** One entry in [BeamBottomNav]. */
 data class BeamNavItem(
@@ -38,16 +39,14 @@ data class BeamNavItem(
 )
 
 /**
- * Floating bottom navigation - a dark glass panel hovering above the content,
- * not a full-width bar attached to the edge.
+ * True Glassmorphism Floating Island (Design 1 Style).
  *
- * Style: nearly full-width rounded panel (18dp side margins, 10dp above the
- * system navigation area, 24dp corners), near-black translucent fill, a single
- * hairline border and a soft exterior shadow.
- *
- * Only the ACTIVE item gets a small pill behind its ICON - the label always sits
- * outside the pill. Colours come from the app theme, so the active state is the
- * Cinephile amber rather than the reference screenshot's navy/periwinkle.
+ * Features:
+ * - Pure frosted glass capsule floating above content
+ * - Extremely clean icon-only layout without heavy oval container background behind active icon
+ * - Active icon glows in bright gold/amber with smooth scaling
+ * - Inactive icons are translucent white/grey outline vectors
+ * - Translucent hairline border highlight with ambient drop shadow
  */
 @Composable
 fun BeamBottomNav(
@@ -58,70 +57,83 @@ fun BeamBottomNav(
 ) {
     val colors = Beam.colors
 
-    Row(
+    // Dark solid surface layer background so content doesn't bleed/merge through
+    val glassBg = Color(0xF7101014)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(start = 18.dp, end = 18.dp, bottom = 10.dp)
-            .shadow(
-                elevation = 18.dp,
-                shape = RoundedCornerShape(24.dp),
-                clip = false,
-                ambientColor = Color(0xB3000000),
-                spotColor = Color(0xB3000000),
-            )
-            .clip(RoundedCornerShape(24.dp))
-            .background(colors.background.copy(alpha = 0.94f))
-            .border(1.dp, colors.border, RoundedCornerShape(24.dp))
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 28.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        items.forEachIndexed { index, item ->
-            val active = index == selectedIndex
-            val interactionSource = remember { MutableInteractionSource() }
-            val tint = if (active) colors.amber500 else colors.mutedForeground
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                    ) { onSelect(index) }
-                    .padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                // Pill behind the icon only - never behind the label.
-                Box(
-                    Modifier
-                        .height(28.dp)
-                        .width(if (active) 54.dp else 28.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (active) colors.amber500.copy(alpha = 0.18f) else Color.Transparent,
+        Row(
+            modifier = Modifier
+                .height(60.dp)
+                .shadow(
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(32.dp),
+                    clip = false,
+                    ambientColor = Color(0xAA000000),
+                    spotColor = Color(0xDD000000),
+                )
+                .clip(RoundedCornerShape(32.dp))
+                .background(glassBg)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0x38FFFFFF),
+                            Color(0x0CFFFFFF),
                         ),
+                    ),
+                    shape = RoundedCornerShape(32.dp),
+                )
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items.forEachIndexed { index, item ->
+                val active = index == selectedIndex
+                val interactionSource = remember { MutableInteractionSource() }
+
+                // Active icon transitions to pure amber, inactive to muted translucent white
+                val iconColor by animateColorAsState(
+                    targetValue = if (active) colors.amber500 else Color(0x73FFFFFF),
+                    animationSpec = spring(stiffness = Spring.StiffnessLow),
+                )
+
+                // Spring animated scale on active icon
+                val iconScale by animateFloatAsState(
+                    targetValue = if (active) 1.2f else 1.0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                        ) { onSelect(index) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
-                        tint = tint,
-                        modifier = Modifier.size(21.dp),
+                        tint = iconColor,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .scale(iconScale),
                     )
                 }
-
-                Spacer(Modifier.height(3.dp))
-
-                Text(
-                    text = item.label,
-                    color = tint,
-                    fontFamily = GeistMono,
-                    fontSize = 9.sp,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                )
             }
         }
     }
 }
+
+

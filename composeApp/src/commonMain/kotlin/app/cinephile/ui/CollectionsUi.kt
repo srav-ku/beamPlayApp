@@ -891,6 +891,7 @@ fun CollItem.toMediaItem(): MediaItem = MediaItem(
 fun CollectionPickerModal(
     items: List<CollItem>,
     onDismiss: () -> Unit,
+    onAddSuccess: () -> Unit = onDismiss,
 ) {
     val colors = Beam.colors
     CollectionsRepo.ensureLoaded()
@@ -1064,7 +1065,7 @@ fun CollectionPickerModal(
                             .background(if (selected.isEmpty()) colors.muted else colors.amber500)
                             .clickable(enabled = selected.isNotEmpty()) {
                                 CollectionsRepo.addItems(selected, items)
-                                onDismiss()
+                                onAddSuccess()
                             }
                             .padding(horizontal = 18.dp, vertical = 10.dp),
                     ) {

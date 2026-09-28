@@ -147,20 +147,21 @@ fun ProfileScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(colors.background),
+            .background(colors.background)
+            .statusBarsPadding(),
     ) {
-        LazyColumn(contentPadding = PaddingValues(bottom = 104.dp)) {
+        LazyColumn(contentPadding = PaddingValues(bottom = 120.dp)) {
             item {
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(16.dp))
                 ProfileHeader(session, isPremium) { showPremium = true }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
                 ProfileTabs(current = tab) { tab = it }
                 if (!isPremium && !bannerDismissed && tab == "Overview") {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(20.dp))
                     PremiumBanner(onOpen = { showPremium = true }, onDismiss = { bannerDismissed = true })
                 }
                 notice?.let { message ->
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
                         text = message,
                         color = colors.amber500,
@@ -169,7 +170,7 @@ fun ProfileScreen(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(22.dp))
             }
 
             when (tab) {
@@ -212,10 +213,6 @@ fun ProfileScreen(
                     item {
                         SettingsCard("Playback & data") {
                             SettingsRow("Subtitle settings", "Style, size and background of captions", divider = true) { showSubtitleSettings = true }
-                            SettingsRow("Clear image cache", "Reclaims space used by posters", divider = true) {
-                                runCatching { clearImageCache() }
-                                notice = "Image cache cleared"
-                            }
                             SettingsRow("Clear watch history", "Removes Continue Watching and history", divider = false) {
                                 confirmClearHistory = true
                             }
@@ -245,23 +242,20 @@ fun ProfileScreen(
                     val markCount = app.cinephile.data.TitleFlags.manualWatched.count { mark -> records.none { it.title == mark.title } }
                     val completed = records.count { it.completed } + markCount
                     val watchedMs = records.sumOf { if (it.completed) it.durationMs else it.positionMs }
-                    if (records.isEmpty()) {
-                        // Four giant zeroes look broken; invite instead.
-                        item { ProfileWelcome() }
-                    } else {
-                    item {
-                        Column(Modifier.padding(horizontal = 16.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                StatTile("Titles", (records.size + markCount).toString(), Modifier.weight(1f))
-                                StatTile("Watch time", humanDuration(watchedMs), Modifier.weight(1f))
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                StatTile("Finished", completed.toString(), Modifier.weight(1f))
-                                StatTile("In progress", (records.size - completed).toString(), Modifier.weight(1f))
+                    if (records.isNotEmpty() || markCount > 0) {
+                        item {
+                            Column(Modifier.padding(horizontal = 16.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    StatTile("Titles", (records.size + markCount).toString(), Modifier.weight(1f))
+                                    StatTile("Watch time", humanDuration(watchedMs), Modifier.weight(1f))
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    StatTile("Finished", completed.toString(), Modifier.weight(1f))
+                                    StatTile("In progress", maxOf(0, records.size - completed).toString(), Modifier.weight(1f))
+                                }
                             }
                         }
-                    }
                     }
 
                     // An empty list has nothing to report, so it is not reported.
@@ -966,36 +960,6 @@ private fun relativeTime(timestamp: Long): String {
     return (months / 12L).toString() + "y ago"
 }
 
-/** No watch data yet: say so warmly instead of printing four zeroes. */
-@Composable
-private fun ProfileWelcome() {
-    val colors = Beam.colors
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(colors.card)
-            .border(1.dp, colors.border, RoundedCornerShape(18.dp))
-            .padding(horizontal = 20.dp, vertical = 30.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Movie,
-            contentDescription = null,
-            tint = colors.mutedForeground,
-            modifier = Modifier.size(34.dp),
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "Start watching to see your stats here.",
-            color = colors.mutedForeground,
-            fontFamily = GeistMono,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
 
 /** Dismissible upsell: present, never in the way. */
 @Composable

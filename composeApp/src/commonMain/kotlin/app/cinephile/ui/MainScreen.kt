@@ -3,6 +3,7 @@ package app.cinephile.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
@@ -135,13 +136,13 @@ private const val PAGE_SIZE_FETCH = 100
 private const val PAGE_SIZE_VISIBLE = 12
 
 enum class Tab(val label: String, val icon: ImageVector) {
-    Home("Home", Icons.Filled.Home),
-    Browse("Browse", Icons.Filled.Explore),
+    Home("Home", CustomNavIcons.Home),
+    Browse("Browse", CustomNavIcons.Browse),
     Movies("Movies", Icons.Filled.Movie),
     Series("Series", Icons.Filled.Tv),
     Search("Search", Icons.Filled.Search),
-    Library("Library", Icons.Filled.LibraryBooks),
-    Profile("Profile", Icons.Filled.Person),
+    Library("Library", CustomNavIcons.Library),
+    Profile("Profile", CustomNavIcons.Profile),
 }
 
 /**
@@ -1682,58 +1683,81 @@ private fun BrowseTab(
         Spacer(Modifier.height(24.dp))
 
         if (selecting) {
-            // Flat toolbar, no border: hierarchy comes from the card surface, not
-            // from a warning-sign outline.
-            Row(
-                Modifier
+            Box(
+                modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .padding(horizontal = 16.dp)
+                    .shadow(4.dp, RoundedCornerShape(12.dp))
                     .clip(RoundedCornerShape(12.dp))
                     .background(colors.card)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Exit selection",
-                    tint = colors.mutedForeground,
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clickable {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Left: Exit icon & Count
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
                             selecting = false
                             selected = emptyList()
-                        },
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = selected.size.toString() + " selected",
-                    color = colors.foreground,
-                    fontFamily = GeistMono,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "Select All",
-                    color = colors.foreground.copy(alpha = 0.7f),
-                    fontFamily = GeistMono,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable { selected = items },
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Add to Lists",
-                    color = colors.background,
-                    fontFamily = GeistMono,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(if (selected.isEmpty()) colors.muted else colors.amber500)
-                        .clickable(enabled = selected.isNotEmpty()) { showAddToCollections = true }
-                        .padding(horizontal = 14.dp),
-                )
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Exit selection",
+                            tint = colors.foreground,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "${selected.size} selected",
+                            color = colors.foreground,
+                            fontFamily = GeistMono,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+
+                    // Right: Select All & Add to Lists button
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = if (selected.size == items.size && items.isNotEmpty()) "Deselect All" else "Select All",
+                            color = colors.foreground.copy(alpha = 0.7f),
+                            fontFamily = GeistMono,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    selected = if (selected.size == items.size) emptyList() else items
+                                }
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
+                        )
+                        Box(
+                            Modifier
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (selected.isEmpty()) colors.muted else colors.amber500)
+                                .clickable(enabled = selected.isNotEmpty()) { showAddToCollections = true }
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Add to List",
+                                color = if (selected.isEmpty()) colors.mutedForeground else colors.background,
+                                fontFamily = GeistMono,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(10.dp))
         }
@@ -1839,6 +1863,9 @@ private fun BrowseTab(
                 )
             },
             onDismiss = {
+                showAddToCollections = false
+            },
+            onAddSuccess = {
                 showAddToCollections = false
                 selecting = false
                 selected = emptyList()

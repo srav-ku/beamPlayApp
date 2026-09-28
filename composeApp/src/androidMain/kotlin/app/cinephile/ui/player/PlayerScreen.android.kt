@@ -155,6 +155,7 @@ actual fun BeamPlayerScreen(
     var exoRef by remember { mutableStateOf<ExoPlayer?>(null) }
     var vlcMp by remember { mutableStateOf<MediaPlayer?>(null) }
     var videoLayout by remember { mutableStateOf<VLCVideoLayout?>(null) }
+    var sawVideoOutput by remember(streamUrl) { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
 
@@ -482,6 +483,7 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             }
             mp.setEventListener { event ->
                 when (event.type) {
+                    MediaPlayer.Event.Vout -> sawVideoOutput = true
                     MediaPlayer.Event.Playing -> {
                         isPlaying = true
                         if (!mp.isSeekable && false) Unit
@@ -502,6 +504,8 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                         runCatching { PlaybackStore.markCompleted(appCtx, storeKey, title, durationMs, streamUrl) }
                 }
             }
+            // A video output that never appears means this stream cannot be decoded here.
+            // Say so instead of sitting on a black screen forever.
             vlcMp = mp
             player = VlcEngine(mp)
             // The resume point is applied on the first Playing event: seeking before
