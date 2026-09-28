@@ -556,6 +556,18 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             runCatching { mp.setVideoScale(scale) }
         }
 
+        // If libVLC never creates a video output, the stream is beyond this device - the
+        // usual reason is a 10-bit H.264 variant at a resolution software decoding cannot
+        // sustain. Twelve seconds is generous; then it says so instead of sitting black.
+        LaunchedEffect(useVlc, sawVideoOutput, streamUrl) {
+            if (!useVlc || sawVideoOutput) return@LaunchedEffect
+            delay(12_000)
+            if (!sawVideoOutput) {
+                playbackError = "This source cannot be decoded on this device - try another source"
+                runCatching { vlcMp?.stop() }
+            }
+        }
+
         LaunchedEffect(vlcMp, videoLayout) {
             val mp = vlcMp ?: return@LaunchedEffect
             val view = videoLayout ?: return@LaunchedEffect
