@@ -156,6 +156,7 @@ actual fun BeamPlayerScreen(
     var vlcMp by remember { mutableStateOf<MediaPlayer?>(null) }
     var videoLayout by remember { mutableStateOf<VLCVideoLayout?>(null) }
     var sawVideoOutput by remember(streamUrl) { mutableStateOf(false) }
+    var media3Retry by remember(streamUrl) { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
 
@@ -277,7 +278,8 @@ actual fun BeamPlayerScreen(
         }
     }
 
-    DisposableEffect(streamUrl, softwareOnly) {
+    DisposableEffect(streamUrl, softwareOnly, useVlc) {
+        if (useVlc) return@DisposableEffect onDispose { }
          val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
              .setBufferDurationsMs(15_000, 120_000, 1_500, 3_000)
              .build()
@@ -563,8 +565,11 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             if (!useVlc || sawVideoOutput) return@LaunchedEffect
             delay(12_000)
             if (!sawVideoOutput) {
-                playbackError = "This source cannot be decoded on this device - try another source"
+                // Hand the same stream to Media3 before giving up: it handles the 8-bit
+                // renditions that libVLC's software path can be slower at.
                 runCatching { vlcMp?.stop() }
+                useVlc = false
+                media3Retry = true
             }
         }
 
