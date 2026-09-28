@@ -438,8 +438,8 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     // filling on a thin link, so playback never began.
                     // A minute of read-ahead: preload without making seeks expensive, and
                     // without the demuxer racing far ahead of the playhead.
-                    "--network-caching=3000",
-                    "--file-caching=3000",
+                    "--network-caching=1500",
+                    "--file-caching=1500",
                     "--http-reconnect",
                     // Auto threads, but at least two: one core cannot decode 10-bit H.264
                     // at 720p in real time.
@@ -451,6 +451,8 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     "--drop-late-frames",
                     "--skip-frames",
                     "--audio-time-stretch",
+                    // Diagnostic: VLC reports decoder underruns and late pictures here.
+                    "--verbose=2",
                 ),
             )
             }.getOrNull()
