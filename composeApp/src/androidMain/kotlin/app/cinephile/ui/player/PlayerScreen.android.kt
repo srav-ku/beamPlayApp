@@ -450,6 +450,9 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                 ),
             )
             }.getOrNull()
+            // VLC reports cache progress constantly, so the chrome must not show a
+            // spinner: it plays and holds, MX-style.
+            isBuffering = false
             val mp = MediaPlayer(libVlc!!)
             if (libVlc == null) {
                 playbackError = "The player engine could not start."
