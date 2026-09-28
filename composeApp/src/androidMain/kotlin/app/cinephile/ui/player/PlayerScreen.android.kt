@@ -469,10 +469,7 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
             }
             mp.setEventListener { event ->
                 when (event.type) {
-                    MediaPlayer.Event.Opening -> isBuffering = true
-                    MediaPlayer.Event.Buffering -> isBuffering = event.buffering < 100f
                     MediaPlayer.Event.Playing -> {
-                        isBuffering = false
                         isPlaying = true
                         if (!mp.isSeekable && false) Unit
                         runCatching {
