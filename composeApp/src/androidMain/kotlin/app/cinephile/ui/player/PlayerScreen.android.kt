@@ -177,7 +177,7 @@ actual fun BeamPlayerScreen(
     // while playback is running, or a decode fails outright, libVLC takes over.
     LaunchedEffect(streamUrl, renderedFirstFrame) {
         if (renderedFirstFrame) return@LaunchedEffect
-        delay(if (needsVlc) 0L else 2500L)
+        delay(if (needsVlc) 0L else 1200L)
         if (!renderedFirstFrame) {
             VlcMemo.mark(context, streamUrl)
             needsVlc = true
@@ -444,6 +444,10 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
                     // Auto threads, but at least two: one core cannot decode 10-bit H.264
                     // at 720p in real time.
                     "--avcodec-threads=0",
+                    // Skipping the loop filter is the single biggest CPU saving in
+                    // software 10-bit decoding; the picture is marginally softer and the
+                    // decoder keeps real time, which is what stops the audio drifting away.
+                    "--avcodec-skiploopfilter=2",
                     "--drop-late-frames",
                     "--skip-frames",
                     "--audio-time-stretch",
@@ -881,13 +885,6 @@ val mediaFactory = androidx.media3.datasource.DataSource.Factory { LoggingDataSo
         }
 
 
-        if (isBuffering && playbackError == null) {
-            CircularProgressIndicator(
-                color = Color.White,
-                strokeWidth = 2.5.dp,
-                modifier = Modifier.align(Alignment.Center).size(52.dp),
-            )
-        }
 
         playbackError?.let { code ->
             Column(
